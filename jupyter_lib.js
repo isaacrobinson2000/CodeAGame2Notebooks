@@ -9,6 +9,8 @@ elem_proto.print = function(obj){
     this.append((obj === undefined)? "": obj);
 };
 
+// canvas.getBoundingClientRect() 
+// window.requestAnimationFrame
 elem_proto.getCanvasAndPainter = function(width, height) {
     let jqCanvas = $.parseHTML("<canvas width='" + width + "' height='" + height +  "' style='width: 100%;'>");
     let painter = jqCanvas[0].getContext("2d");
