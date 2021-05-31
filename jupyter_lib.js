@@ -151,6 +151,122 @@ class Sprite {
 
 window.Sprite = Sprite;
 
-elem_proto.makeGame = async function(width, height, gameLoop) {
+
+class Camera {
+    constructor(canvas, minPixelsShown) {
+        this._canvas = canvas;
+        this._minPixelsShown = minPixelsShown;
+        this._zoom = 1;
+        this._track = null;
+        this._centerPoint = [0, 0];
+    }
     
+    setMinimumPixelsShown(value) {
+        this._minPixelsShown = value;
+    }
+    
+    update(gameState) {
+        let minCanvasSide = Math.min(this._canvas.width, this._canvas.height);
+        this._zoom = this._minPixelsShown / minCanvasSide;
+        
+        if("getHitBox" in this._track) {
+            let [x, y, w, h] = this._track.getHitBox();
+            
+            this._centerPoint = [x - w / 2, y - h / 2];
+        }
+    }
+    
+    getBounds() {
+        let [cx, cy] = this._centerPoint;
+        let w = this._canvas.width / this._zoom;
+        let h = this._canvas.height / this._zoom;
+        
+        return [cx - w / 2, cy - h / 2, w, h];
+    }
+    
+    transform(point) {
+        let [x, y] = point;
+        
+        let [gx, gy, gw, gh] = this.getBounds();
+        let cw = this._canvas.width;
+        let ch = this._canvas.height;
+        
+        return [((x - gx) / gw) * cw, ((y - gy) / gh) * ch]
+    }
+    
+    transformBox(box) {
+        let [x, y, w, h] = box;
+        
+        let [p1x, p1y] = this.transform(x, y);
+        let [p2x, p2y] = this.transform(x + w, y + h);
+        
+        return [p1x, p1y, p2x - p1x, p2y - p2y];
+    }
+}
+
+window.Camera = Camera;
+
+elem_proto.makeGame = async function(gameLoop, gameState = {}) {
+    
+    let newDiv = $($.parseHTML("<div style='position: fixed; z-index: 300; top: 0; bottom: 0; left: 0; right: 0; background-color: white;'></div>"));
+    let newCanvas = $($.parseHTML("<canvas style='width: 100%; height: 100%;'>Your browser doesn't support canvas!</canvas>"));
+    let closeBtn = $($.parseHTML("<button style='position: absolute; top: 0; right: 0;'>X</button>"));
+        
+    newDiv.append(newCanvas);
+    newDiv.append(closeBtn);
+    
+    $(document.body).append(newDiv);
+    
+    gameState = {...gameState};
+    
+    gameState.lastTimeStamp = null;
+    gameState.keepRunning = true;
+    gameState.canvas = newCanvas[0];
+    gameState.painter = newCanvas[0].getContext("2d");
+    gameState.keysPressed = {};
+    
+    
+    function loopManager(timeStamp) {
+        let {width, height} = gameState.canvas.getBoundingClientRect();
+        
+        gameState.canvas.width = width;
+        gameState.canvas.height = height;
+        
+        let timeStep = (gameState.lastTimeStamp == null)? 0: timeStamp - gameState.lastTimeStamp;
+        
+        gameLoop(timeStep, gameState);
+        
+        gameState.lastTimeStamp = timeStamp;
+                
+        if(gameState.keepRunning) {
+            window.requestAnimationFrame(loopManager);
+        }
+    };
+    
+    // Manage keyboard events, keep track of pressed keys in special property in the gameState object.
+    let doc = $(document);
+    doc.off("keydown");
+    
+    doc.on("keydown.gameloop", (event) => {
+        gameState.keysPressed[event.key] = true;
+    });
+    
+    doc.on("keyup.gameloop", (event) => {
+        delete gameState.keysPressed[event.key];
+    });
+    
+    // If the close button is clicked delete the div and terminate the game loop.
+    closeBtn.click(() => {
+        newDiv.remove();
+        gameState.keepRunning = false;
+        doc.off(".gameloop");
+        try {
+            Jupyter.keyboard_manager.bind_events();
+        } catch(e) {
+            console.log(e);
+        }
+    });
+    
+    // Start the game loop.
+    window.requestAnimationFrame(loopManager);
 };
