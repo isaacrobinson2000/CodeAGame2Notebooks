@@ -312,6 +312,10 @@ elem_proto.makeBaseGame = async function(gameLoop, gameState = {}, levelData = {
         return false;
     });
     
+    closeBtn.mousedown(false);
+    closeBtn.mouseup(false);
+    closeBtn.mousemove(false);
+    
     // Manage keyboard events, keep track of pressed keys in special property in the gameState object.
     let doc = $(document);
     // We have to disable all other keyevents as jupyter notebook doesn't play nicely with keyboard input.
@@ -389,7 +393,7 @@ class GameObject {
         return [x, y];
     }
     
-    getName() {}
+    static getName() {}
 }
 window.GameObject = GameObject;
 
@@ -477,8 +481,18 @@ function _gameObjListToMapping(list) {
     for(let elem of list) {
         mappingObj[elem.getName()] = elem;
     }
-    
+        
     return mappingObj;
+}
+
+function _gameObjMappingToList(obj) {
+    let list = [];
+    
+    for(let key in obj) {
+        list.push(obj[key]);
+    }
+    
+    return list;
 }
 
 elem_proto.levelEditor = async function(levelPath = null, blockTypes = [], entityTypes = []) {
@@ -506,6 +520,91 @@ elem_proto.levelEditor = async function(levelPath = null, blockTypes = [], entit
         }
     }
     
+    class GameSelectPanel extends GameObject {
+        constructor(x, y, blockSize, sprites) {
+            super(x, y, blockSize, sprites);
+            this._deleteSprite = sprites["_levelEditDelete"].buildSprite();
+            this._itemSize = blockSize;
+            this._hovered = null;
+            this._selected = null;
+            this._blocks = null;
+            this._entities = null;
+            this._sprites = sprites;
+            this._width = 0;
+            this._overbar = false;
+        }
+        
+        _grabSelection(tileX, tileY, entityLen, blockLen) {
+            switch(tileY) {
+                case 0:
+                    return ((tileX >= 0) && (tileX < entityLen + 1))? ["entity", tileX - 1]: null;
+                case 1:
+                    return ((tileX >= 0) && (tileX < blockLen + 1))? ["block", tileX - 1]: null;
+            }
+            
+            return null;
+        }
+        
+        update(timeStep, gameState) {
+            if(this._blocks == null) {
+                this._blocks = _gameObjMappingToList(gameState.blockTypes);
+                this._entities = _gameObjMappingToList(gameState.entityTypes);
+            }
+            
+            let [x, y, w, h] = gameState.camera.getBounds();
+            
+            [this._x, this._y] = [x, y];
+            this._width = w;
+            
+            this._itemSize = Math.min(w / this._blocks.length, this._blockSize, w / this._entities.length);
+            
+            let [mx, my] = gameState.camera.reverseTransform(gameState.mouseLocation);
+            let [tileX, tileY] = [Math.floor((mx - x) / this._itemSize), Math.floor((my - y) / this._itemSize)];
+            
+            this._overbar = tileY < 2 && tileY >= 0;
+            this._hovered = this._grabSelection(tileX, tileY, this._entities.length, this._blocks.length);
+
+            if(gameState.mousePressed && this._hovered != null) {
+                this._selected = this._hovered;
+            }
+
+            this._deleteSprite.update(timeStep);
+        }
+        
+        getSelection() {
+            if(this.overbar) return [null, null];
+        }
+        
+        draw(canvas, painter, camera) {
+            painter.fillStyle = "#dbdbdb";
+            let [x, y, width, height] = camera.transformBox([this._x, this._y, this._width, this._itemSize * 2]);
+            let step = height / 2;
+            
+            painter.fillRect(x, y, width, height);
+            
+            this._deleteSprite.draw(painter, x, y, step, step);
+            this._deleteSprite.draw(painter, x, y + step, step, step);
+            for(let i = 0; i < this._entities.length; i++) {
+                (new this._entities[i](x + step * (i + 1), y, step, this._sprites)).drawPreview(canvas, painter, [x + step * (i + 1), y, step, step]);
+            }
+            for(let i = 0; i < this._blocks.length; i++) {
+                (new this._blocks[i](x + step * (i + 1), y + step, step, this._sprites)).drawPreview(canvas, painter, [x + step * (i + 1), y + step, step, step]);
+            }
+            
+            // Hover object....
+            if(this._hovered != null) {
+                painter.fillStyle = "rgba(46, 187, 230, 0.5)";
+                painter.fillRect(x + (this._hovered[1] + 1) * step, (this._hovered[0] == "block")? y + step: y, step, step);
+            }
+            
+            // Selected Object...
+            if(this._selected != null) {
+                painter.fillStyle = "rgba(27, 145, 181, 0.7)";
+                painter.fillRect(x + (this._selected[1] + 1) * step, (this._selected[0] == "block")? y + step: y, step, step);
+            }
+        }
+    }
+    
     function update(timeStep, gameState) {
         let keys = gameState.keysPressed;
         let c = gameState.camera;
@@ -520,6 +619,7 @@ elem_proto.levelEditor = async function(levelPath = null, blockTypes = [], entit
         c.setCenterPoint([cx, cy]);
         
         gameState.hoverIndicator.update(timeStep, gameState);
+        gameState.selectorBar.update(timeStep, gameState);
         c.update();
         
         gameState.loadedChunks = _manageChunks(
@@ -557,11 +657,13 @@ elem_proto.levelEditor = async function(levelPath = null, blockTypes = [], entit
         }
             
         gameState.hoverIndicator.draw(canvas, painter, gameState.camera);
+        gameState.selectorBar.draw(canvas, painter, gameState.camera);
     }
     
     function gameLoop(timeStep, gameState) {
         if(gameState.hoverIndicator == null) {
             gameState.hoverIndicator = new GameHoverBlock(0, 0, level.blockSize, gameState.sprites);
+            gameState.selectorBar = new GameSelectPanel(0, 0, level.blockSize, gameState.sprites);
         }
         
         update(timeStep, gameState);
@@ -582,6 +684,9 @@ elem_proto.levelEditor = async function(levelPath = null, blockTypes = [], entit
                         "speed": 150
                     }
                 }
+            },
+            "_levelEditDelete": {
+                "image": "levelEdit/deleteSelected.png",
             }
         }
     };
