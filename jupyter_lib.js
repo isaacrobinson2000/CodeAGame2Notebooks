@@ -269,7 +269,7 @@ elem_proto.makeBaseGame = async function(gameLoop, gameState = {}, levelData = {
     gameState.lastTimeStamp = null;
     gameState.keepRunning = true;
     gameState.canvas = newCanvas[0];
-    gameState.painter = newCanvas[0].getContext("2d");
+    gameState.painter = gameState.canvas.getContext("2d");
     gameState.keysPressed = {};
     gameState.mousePressed = false;
     gameState.mouseLocation = [0, 0];
@@ -287,6 +287,11 @@ elem_proto.makeBaseGame = async function(gameLoop, gameState = {}, levelData = {
         
         gameState.canvas.width = width;
         gameState.canvas.height = height;
+        
+        gameState.painter.imageSmoothingEnabled = false; 
+        gameState.painter.mozImageSmoothingEnabled = false; 
+        gameState.painter.webkitImageSmoothingEnabled = false; 
+        gameState.painter.msImageSmoothingEnabled = false; 
         
         let timeStep = (gameState.lastTimeStamp == null)? 0: timeStamp - gameState.lastTimeStamp;
         
@@ -421,6 +426,10 @@ class GameObject {
         
         return obj;
     }
+    
+    getHitBox() {
+        return [this.x, this.y, 1, 1];
+    }
 }
 window.GameObject = GameObject;
 
@@ -443,7 +452,7 @@ function _loadChunk(cx, cy, level, blockTypes, entityTypes, sprites) {
     
     // Load sprites...
     for(let data of level.chunks[cx][cy].entities) {
-        newLoadedChunk.entities.push(new entityTypes[data._$type].fromJSON(data, level.blockSize, sprites));
+        newLoadedChunk.entities.push(entityTypes[data._$type].fromJSON(data, level.blockSize, sprites));
     }
     
     return newLoadedChunk;
@@ -555,11 +564,19 @@ elem_proto.levelEditor = async function(levelPath = null, blockTypes = [], entit
     }
     
     function _deleteEntity(blockX, blockY, loadedChunk, chunkSize) {
-        
+        for(let i = 0; i < loadedChunk.entities.length; i++) {
+            let entity = loadedChunk.entities[i];
+            
+            let [x, y, w, h] = entity.getHitBox();
+            if((blockX > x) && (blockY > y) && (blockX < x + w) && (blockY < y + h)) {
+                loadedChunk.entities.splice(i, 1);
+                return;
+            }
+        }
     }
     
     function _addEntity(blockX, blockY, loadedChunk, chunkSize, blockSize, entityClass, sprites) {
-        
+        loadedChunk.entities.push(new entityClass(blockX, blockY, blockSize, sprites));
     }
     
     function _setPlayer(blockX, blockY, gameState, playerType, blockSize, sprites) {
