@@ -195,6 +195,10 @@ class Camera {
         this._track = track;
     }
     
+    getMinimumPixelsShown() {
+        return this._minPixelsShown;
+    }
+    
     setMinimumPixelsShown(value) {
         this._minPixelsShown = value;
     }
@@ -398,7 +402,7 @@ class GameObject {
 window.GameObject = GameObject;
 
 
-function _loadChunk(cx, cy, level, blockTypes, entityTypes, sprites) {
+function _loadChunk(cx, cy, level, blockTypes, entityTypes, sprites) {    
     let chunkSize = level.chunkSize;
     let newLoadedChunk = _makeEmptyChunk(chunkSize);
     
@@ -477,8 +481,8 @@ function _manageChunks(level, camera, loadedChunks, blockTypes, entityTypes, spr
 }
 
 function _findChunk(x, y, loadedChunks) {
-    for(let [x, y, chunk] of loadedChunks) {
-        return chunk;
+    for(let [cx, cy, chunk] of loadedChunks) {
+        if((cx == x) && (cy == y)) return chunk;
     }
     
     return null;
@@ -506,7 +510,11 @@ function _gameObjMappingToList(obj) {
 
 elem_proto.levelEditor = async function(levelPath = null, blockTypes = [], entityTypes = []) {
     let level = (levelPath == null)? _makeEmptyLevel(): await loadJSON(levelPath);
-    let cameraVelocity = 200 / 1000;
+    let cameraVelocity = 8 / 10000; // In screen quantile per millisecond...
+    let cameraMaxZoomIn = 200;
+    let cameraMaxZoomOut = 3000;
+    let cameraScaleSpeed = 0.6; // In pixels per millisecond...
+    
     
     function _deleteBlock(blockX, blockY, loadedChunk, chunkSize) {
         blockX = Math.floor(blockX % chunkSize);
@@ -518,9 +526,7 @@ elem_proto.levelEditor = async function(levelPath = null, blockTypes = [], entit
     function _addBlock(blockX, blockY, loadedChunk, chunkSize, blockSize, blockClass, sprites) {
         let cBlockX = Math.floor(blockX % chunkSize);
         let cBlockY = Math.floor(blockY % chunkSize);
-        
-        console.log(loadedChunk.blocks);
-        
+                        
         loadedChunk.blocks[cBlockX][cBlockY] = new blockClass(Math.floor(blockX) * blockSize , Math.floor(blockY) * blockSize, blockSize, sprites);
     }
     
@@ -666,7 +672,13 @@ elem_proto.levelEditor = async function(levelPath = null, blockTypes = [], entit
         let keys = gameState.keysPressed;
         let c = gameState.camera;
         let [cx, cy] = c.getCenterPoint();
-        let stepAmt = cameraVelocity * timeStep;
+        let cZoomStep = cameraScaleSpeed * timeStep;
+        
+        
+        if("Minus" in keys) gameState.camera.setMinimumPixelsShown(Math.min(cameraMaxZoomOut, gameState.camera.getMinimumPixelsShown() + cZoomStep));
+        if("Equal" in keys) gameState.camera.setMinimumPixelsShown(Math.max(cameraMaxZoomIn, gameState.camera.getMinimumPixelsShown() - cZoomStep));
+        
+        let stepAmt = cameraVelocity * timeStep * gameState.camera.getMinimumPixelsShown();
             
         if("ArrowUp" in keys || "KeyW" in keys) cy -= stepAmt;
         if("ArrowDown" in keys || "KeyS" in keys) cy += stepAmt;
@@ -687,9 +699,15 @@ elem_proto.levelEditor = async function(levelPath = null, blockTypes = [], entit
         
         // We check if user has clicked a location with a item in the toolbar selected...
         let [selLocX, selLocY] = gameState.hoverIndicator.getBlockLocation();
+        let blockLoc = [Math.floor(selLocX), Math.floor(selLocY)];
         let selection = gameState.selectorBar.getSelection();
-        if(gameState.clickWasDown && !gameState.selectorBar.getOverBar() && (selection != null) && (selLocX != null) && !gameState.mousePressed) {
-            let chunk = _findChunk(Math.floor(selLocX / level.chunkSize), Math.floor(selLocY) / level.chunkSize, gameState.loadedChunks);
+        if(
+            (!gameState.clickWasDown || (gameState.lastBlockLocation.join() != blockLoc.join())) 
+            && !gameState.selectorBar.getOverBar() && (selection != null) 
+            && (selLocX != null) && gameState.mousePressed
+        ) {
+            console.log("Do!");
+            let chunk = _findChunk(Math.floor(selLocX / level.chunkSize), Math.floor(selLocY / level.chunkSize), gameState.loadedChunks);
             if(chunk != null) {
                 switch(selection[0]) {
                     case "block":
@@ -705,6 +723,8 @@ elem_proto.levelEditor = async function(levelPath = null, blockTypes = [], entit
                 }
             }
         }
+        
+        gameState.lastBlockLocation = blockLoc;
         gameState.clickWasDown = gameState.mousePressed;
     }
     
@@ -719,14 +739,16 @@ elem_proto.levelEditor = async function(levelPath = null, blockTypes = [], entit
                 
                 for(let by = 0; by < blockCol.length; by++) {
                     let block = blockCol[by];
-                    if(block != null) block.draw(canvas, painter, gameState.camera);
                     
                     let gx = x * level.chunkSize * level.blockSize + bx * level.blockSize;
                     let gy = y * level.chunkSize * level.blockSize + by * level.blockSize;
-                    let [canvX, canvY, canvW, canvH] = gameState.camera.transformBox([gx, gy, gx + level.blockSize, gy + level.blockSize]);
+                    
+                    let [canvX, canvY, canvW, canvH] = gameState.camera.transformBox([gx, gy, level.blockSize, level.blockSize]);
                     
                     painter.strokeStyle = "black";
                     painter.strokeRect(canvX, canvY, canvW, canvH);
+                    
+                    if(block != null) block.draw(canvas, painter, gameState.camera);
                 }
             }
             
@@ -758,6 +780,7 @@ elem_proto.levelEditor = async function(levelPath = null, blockTypes = [], entit
     gameState.entityTypes = _gameObjListToMapping(entityTypes);
     gameState.blockTypes = _gameObjListToMapping(blockTypes);
     gameState.loadedChunks = [];
+    gameState.lastBlockLocation = null;
     gameState.clickWasDown = false;
     
     let data = {
