@@ -355,8 +355,9 @@ function _makeEmptyLevel() {
         "blockSize": 32,
         "chunkSize": 16,
         "numChunks": [10, 10],
+        "player": null,
         "chunks": []
-    }
+    };
     let chunks = level.chunks;
     
     // Initial level with all null...
@@ -385,8 +386,8 @@ function _makeEmptyChunk(chunkSize) {
 
 class GameObject {
     constructor(x, y, blockSize, sprites) {
-        this._x = x;
-        this._y = y;
+        this.x = x;
+        this.y = y;
         this._blockSize = blockSize;
     }
     update(timeStep, gameState) {}
@@ -397,7 +398,29 @@ class GameObject {
         return [this._x, this._y];
     }
     
-    static getName() {}
+    toJSON() {
+        let obj = {
+            _$type: this.constructor.name
+        };
+        
+        for(let prop in this) {
+            if(!prop.startsWith("_")) {
+                obj[prop] = this[prop];
+            }
+        }
+        
+        return obj;
+    }
+    
+    static fromJSON(data, blockSize, sprites) {
+        let obj = new this(data.x, data.y, blockSize, sprites);
+        
+        for(let prop in data) {
+            if(!prop.startsWith("_")) obj[prop] = data[prop];
+        }
+        
+        return obj;
+    }
 }
 window.GameObject = GameObject;
 
@@ -409,17 +432,18 @@ function _loadChunk(cx, cy, level, blockTypes, entityTypes, sprites) {
     // Load blocks...
     for(let x = 0; x < chunkSize; x++) {
         for(let y = 0; y < chunkSize; y++) {
-            let blockName = level.chunks[cx][cy].blocks[x][y];
-            let bx = cx * chunkSize * level.blockSize + x * level.blockSize;
-            let by = cy * chunkSize * level.blockSize + y * level.blockSize;
+            let blockData = level.chunks[cx][cy].blocks[x][y];
+            let blockName = (blockData != null)? blockData._$type: null;
+            let bx = cx * chunkSize + x;
+            let by = cy * chunkSize + y;
 
-            newLoadedChunk.blocks[x][y] = (blockName != null)? new blockTypes[blockName](bx, by, level.blockSize, sprites): null;
+            newLoadedChunk.blocks[x][y] = (blockName != null)? blockTypes[blockName].fromJSON(blockData, level.blockSize, sprites): null;
         }
     }
     
     // Load sprites...
-    for(let [x, y, name] of level.chunks[cx][cy].entities) {
-        newLoadedChunk.entities.push(new entityTypes[name](x, y, level.blockSize, sprites));
+    for(let data of level.chunks[cx][cy].entities) {
+        newLoadedChunk.entities.push(new entityTypes[data._$type].fromJSON(data, level.blockSize, sprites));
     }
     
     return newLoadedChunk;
@@ -431,14 +455,14 @@ function _unloadChunk(chunk, cx, cy, level) {
     for(let x = 0; x < chunkSize; x++) {
         for(let y = 0; y < chunkSize; y++) {
             let res = chunk.blocks[x][y]
-            level.chunks[cx][cy].blocks[x][y] = (res != null)? res.constructor.getName(): null;
+            level.chunks[cx][cy].blocks[x][y] = (res != null)? res.toJSON(): null;
         }
     }
     
     level.chunks[cx][cy].entities = [];
     // Save chunk entities...
     for(let entity of chunk.entities) {
-        level.chunks[cx][cy].entities.push([...entity.getLocation(), entity.constructor.getName()]);
+        level.chunks[cx][cy].entities.push(entity.toJSON());
     }
 }
 
@@ -492,7 +516,7 @@ function _gameObjListToMapping(list) {
     let mappingObj = {};
     
     for(let elem of list) {
-        mappingObj[elem.getName()] = elem;
+        mappingObj[elem.name] = elem;
     }
         
     return mappingObj;
@@ -508,7 +532,7 @@ function _gameObjMappingToList(obj) {
     return list;
 }
 
-elem_proto.levelEditor = async function(levelPath = null, blockTypes = [], entityTypes = []) {
+elem_proto.levelEditor = async function(levelPath = null, blockTypes = [], entityTypes = [], levelData = {}, playerType = null) {
     let level = (levelPath == null)? _makeEmptyLevel(): await loadJSON(levelPath);
     let cameraVelocity = 8 / 10000; // In screen quantile per millisecond...
     let cameraMaxZoomIn = 200;
@@ -526,16 +550,22 @@ elem_proto.levelEditor = async function(levelPath = null, blockTypes = [], entit
     function _addBlock(blockX, blockY, loadedChunk, chunkSize, blockSize, blockClass, sprites) {
         let cBlockX = Math.floor(blockX % chunkSize);
         let cBlockY = Math.floor(blockY % chunkSize);
-                        
-        loadedChunk.blocks[cBlockX][cBlockY] = new blockClass(Math.floor(blockX) * blockSize , Math.floor(blockY) * blockSize, blockSize, sprites);
+                                
+        loadedChunk.blocks[cBlockX][cBlockY] = new blockClass(Math.floor(blockX), Math.floor(blockY), blockSize, sprites);
     }
     
-    function _deleteEntity() {
+    function _deleteEntity(blockX, blockY, loadedChunk, chunkSize) {
         
     }
     
-    function _addEntity() {
+    function _addEntity(blockX, blockY, loadedChunk, chunkSize, blockSize, entityClass, sprites) {
         
+    }
+    
+    function _setPlayer(blockX, blockY, gameState, playerType, blockSize, sprites) {
+        if(playerType != null) {
+            gameState.level.player = new playerType(blockX, blockY, blockSize, sprites);
+        }
     }
     
     class GameHoverBlock extends GameObject {
@@ -553,15 +583,15 @@ elem_proto.levelEditor = async function(levelPath = null, blockTypes = [], entit
                 this._chunkSize = gameState.level.chunkSize;
             }
             
-            [this._x, this._y] = gameState.camera.reverseTransform(gameState.mouseLocation);
-            this._x = Math.floor(this._x / this._blockSize) * this._blockSize;
-            this._y = Math.floor(this._y / this._blockSize) * this._blockSize;
+            [this.x, this.y] = gameState.camera.reverseTransform(gameState.mouseLocation);
+            this.x = this.x / this._blockSize;
+            this.y = this.y / this._blockSize;
 
             this._sprite.update(timeStep);
         }
         
         getBlockLocation() {
-            let [x, y] = [this._x / this._blockSize, this._y / this._blockSize];
+            let [x, y] = [this.x, this.y];
             
             if((x < 0) || (x >= this._numChunks[0] * this._chunkSize)) return [null, null];
             if((y < 0) || (y >= this._numChunks[1] * this._chunkSize)) return [null, null];
@@ -570,7 +600,7 @@ elem_proto.levelEditor = async function(levelPath = null, blockTypes = [], entit
         }
         
         draw(canvas, painter, camera) {
-            let [x, y, w, h] = camera.transformBox([this._x, this._y, this._blockSize, this._blockSize]);
+            let [x, y, w, h] = camera.transformBox([Math.floor(this.x) * this._blockSize, Math.floor(this.y) * this._blockSize, this._blockSize, this._blockSize]);
             this._sprite.draw(painter, x, y, w, h);
         }
     }
@@ -587,12 +617,13 @@ elem_proto.levelEditor = async function(levelPath = null, blockTypes = [], entit
             this._sprites = sprites;
             this._width = 0;
             this._overbar = false;
+            this._playerType = null;
         }
         
         _grabSelection(tileX, tileY, entityLen, blockLen) {
             switch(tileY) {
                 case 0:
-                    return ((tileX >= 0) && (tileX < entityLen + 1))? ["entity", tileX - 1]: null;
+                    return ((tileX >= 0) && (tileX < entityLen + 2))? ["entity", tileX - 2]: null;
                 case 1:
                     return ((tileX >= 0) && (tileX < blockLen + 1))? ["block", tileX - 1]: null;
             }
@@ -604,10 +635,11 @@ elem_proto.levelEditor = async function(levelPath = null, blockTypes = [], entit
             if(this._blocks == null) {
                 this._blocks = _gameObjMappingToList(gameState.blockTypes);
                 this._entities = _gameObjMappingToList(gameState.entityTypes);
-                this._loopupObj = {
+                this._lookupObj = {
                     "entity": this._entities,
                     "block": this._blocks
                 }
+                this._playerType = gameState.playerType;
             }
             
             let [x, y, w, h] = gameState.camera.getBounds();
@@ -615,7 +647,7 @@ elem_proto.levelEditor = async function(levelPath = null, blockTypes = [], entit
             [this._x, this._y] = [x, y];
             this._width = w;
             
-            this._itemSize = Math.min(w / this._blocks.length, this._blockSize, w / this._entities.length);
+            this._itemSize = Math.min(w / (this._blocks.length + 1), this._blockSize, w / (this._entities.length + 2));
             
             let [mx, my] = gameState.camera.reverseTransform(gameState.mouseLocation);
             let [tileX, tileY] = [Math.floor((mx - x) / this._itemSize), Math.floor((my - y) / this._itemSize)];
@@ -635,7 +667,7 @@ elem_proto.levelEditor = async function(levelPath = null, blockTypes = [], entit
         }
         
         getSelection() {
-            return (this._selected != null)? [this._selected[0], (this._selected[1] != -1)? this._loopupObj[this._selected[0]][this._selected[1]]: null]: null;
+            return (this._selected != null)? [this._selected[0], (this._selected[1] >= 0)? this._lookupObj[this._selected[0]][this._selected[1]]: this._selected[1]]: null;
         }
         
         draw(canvas, painter, camera) {
@@ -646,9 +678,12 @@ elem_proto.levelEditor = async function(levelPath = null, blockTypes = [], entit
             painter.fillRect(x, y, width, height);
             
             this._deleteSprite.draw(painter, x, y, step, step);
+            if(this._playerType != null) {
+                (new this._playerType(0, 0, step, this._sprites)).drawPreview(canvas, painter, [x + step, y, step, step]);
+            }
             this._deleteSprite.draw(painter, x, y + step, step, step);
             for(let i = 0; i < this._entities.length; i++) {
-                (new this._entities[i](x + step * (i + 1), y, step, this._sprites)).drawPreview(canvas, painter, [x + step * (i + 1), y, step, step]);
+                (new this._entities[i](x + step * (i + 2), y, step, this._sprites)).drawPreview(canvas, painter, [x + step * (i + 2), y, step, step]);
             }
             for(let i = 0; i < this._blocks.length; i++) {
                 (new this._blocks[i](x + step * (i + 1), y + step, step, this._sprites)).drawPreview(canvas, painter, [x + step * (i + 1), y + step, step, step]);
@@ -657,13 +692,15 @@ elem_proto.levelEditor = async function(levelPath = null, blockTypes = [], entit
             // Hover object....
             if(this._hovered != null) {
                 painter.fillStyle = "rgba(46, 187, 230, 0.5)";
-                painter.fillRect(x + (this._hovered[1] + 1) * step, (this._hovered[0] == "block")? y + step: y, step, step);
+                let [idxOff, yOff] = (this._hovered[0] == "block")? [1, step]: [2, 0];
+                painter.fillRect(x + (this._hovered[1] + idxOff) * step, (this._hovered[0] == "block")? y + yOff: y, step, step);
             }
             
             // Selected Object...
             if(this._selected != null) {
                 painter.fillStyle = "rgba(27, 145, 181, 0.7)";
-                painter.fillRect(x + (this._selected[1] + 1) * step, (this._selected[0] == "block")? y + step: y, step, step);
+                let [idxOff, yOff] = (this._selected[0] == "block")? [1, step]: [2, 0];
+                painter.fillRect(x + (this._selected[1] + idxOff) * step, (this._selected[0] == "block")? y + yOff: y, step, step);
             }
         }
     }
@@ -690,7 +727,6 @@ elem_proto.levelEditor = async function(levelPath = null, blockTypes = [], entit
         
         gameState.hoverIndicator.update(timeStep, gameState);
         gameState.selectorBar.update(timeStep, gameState);
-        
         gameState.loadedChunks = _manageChunks(
             level, gameState.camera, gameState.loadedChunks, 
             gameState.blockTypes, gameState.entityTypes, 
@@ -706,12 +742,11 @@ elem_proto.levelEditor = async function(levelPath = null, blockTypes = [], entit
             && !gameState.selectorBar.getOverBar() && (selection != null) 
             && (selLocX != null) && gameState.mousePressed
         ) {
-            console.log("Do!");
             let chunk = _findChunk(Math.floor(selLocX / level.chunkSize), Math.floor(selLocY / level.chunkSize), gameState.loadedChunks);
             if(chunk != null) {
                 switch(selection[0]) {
                     case "block":
-                        if(selection[1] != null) {
+                        if(selection[1] != -1) {
                             _addBlock(selLocX, selLocY, chunk, level.chunkSize, level.blockSize, selection[1], gameState.sprites);
                         }
                         else {
@@ -719,6 +754,16 @@ elem_proto.levelEditor = async function(levelPath = null, blockTypes = [], entit
                         }
                         break;
                     case "entity":
+                        switch(selection[1]) {
+                            case -2:
+                                _deleteEntity(selLocX, selLocY, chunk, level.chunkSize);
+                                break;
+                            case -1:
+                                _setPlayer(selLocX, selLocY, gameState, gameState.playerType, level.blockSize, gameState.sprites);
+                                break;
+                            default: 
+                                _addEntity(selLocX, selLocY, chunk, level.chunkSize, level.blockSize, selection[1], gameState.sprites);
+                        }
                         break;
                 }
             }
@@ -757,6 +802,10 @@ elem_proto.levelEditor = async function(levelPath = null, blockTypes = [], entit
             }
         }
         
+        if(gameState.level.player != null) {
+            gameState.level.player.draw(canvas, painter, gameState.camera);
+        }
+        
         let [selLocX, selLocY] = gameState.hoverIndicator.getBlockLocation();
         if((selLocX != null) && !gameState.selectorBar.getOverBar() && gameState.hoverIndicator.getLocation()) {
             gameState.hoverIndicator.draw(canvas, painter, gameState.camera);
@@ -782,22 +831,24 @@ elem_proto.levelEditor = async function(levelPath = null, blockTypes = [], entit
     gameState.loadedChunks = [];
     gameState.lastBlockLocation = null;
     gameState.clickWasDown = false;
+    gameState.playerType = playerType;
     
-    let data = {
-        sprites: {
-            "_levelEditHover": {
-                "image": "levelEdit/hover.png",
-                "animations": {
-                    "main": {
-                        "speed": 150
-                    }
+    let data = {...levelData};
+    
+    let levelEditSprites = {
+        "_levelEditHover": {
+            "image": "levelEdit/hover.png",
+            "animations": {
+                "main": {
+                    "speed": 150
                 }
-            },
-            "_levelEditDelete": {
-                "image": "levelEdit/deleteSelected.png",
             }
+        },
+        "_levelEditDelete": {
+            "image": "levelEdit/deleteSelected.png",
         }
-    };
+    }
+    data.sprites = (data.sprites != null)? {...data.sprites, ...levelEditSprites}: levelEditSprites;
     
     this.makeBaseGame(gameLoop, gameState, data);
 }
