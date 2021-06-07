@@ -355,6 +355,30 @@ elem_proto.makeBaseGame = async function(gameLoop, gameState = {}, levelData = {
 };
 
 
+let _kernel = IPython.notebook.kernel;
+
+function runPython(code) {
+    return new Promise(function(resolve, reject) {
+        let callbacks = {
+            shell: {
+                reply: (data) => {
+                    if(data.content.status == "ok") {
+                        resolve(data);
+                    }
+                    else if(data.content.status == "error") {
+                        reject(data.content.ename + ": " + data.content.evalue);
+                    }
+                    else {
+                        reject("Unkown Error!")
+                    }
+                }
+            }
+        }
+        
+        _kernel.execute(code, callbacks);
+    });
+}
+
 function _makeEmptyLevel() {
     let level = {
         "blockSize": 32,
@@ -475,6 +499,12 @@ function _unloadChunk(chunk, cx, cy, level) {
     }
 }
 
+function _flushLoadedChunks(level, loadedChunks) {
+    for(let [x, y, chunk] of loadedChunks) {
+        _unloadChunk(chunk, x, y, level);
+    }
+}
+
 function _manageChunks(level, camera, loadedChunks, blockTypes, entityTypes, sprites) {
     // Issue: Blocks just dissapear!
     let [cx, cy, cw, ch] = camera.getBounds();
@@ -541,13 +571,41 @@ function _gameObjMappingToList(obj) {
     return list;
 }
 
-elem_proto.levelEditor = async function(levelPath = null, blockTypes = [], entityTypes = [], levelData = {}, playerType = null) {
-    let level = (levelPath == null)? _makeEmptyLevel(): await loadJSON(levelPath);
+function _saveLevelCode(filename, levelData) {
+    const LEVEL_EDIT_CODE = `
+    import base64
+    from pathlib import Path
+    
+    p = Path(base64.decodebytes(b"${btoa(filename)}").decode())
+    data = base64.decodebytes(b"${btoa(levelData)}")
+    
+    with p.open("wb") as f:
+        f.write(data)
+    `;
+    
+    return LEVEL_EDIT_CODE;
+}
+
+elem_proto.levelEditor = async function(levelPath, blockTypes = [], entityTypes = [], levelData = {}, playerType = null) {
+    let level;
+    try {
+        level = (levelPath == null)? _makeEmptyLevel(): await loadJSON(levelPath);
+    } catch(exp) {
+        level = _makeEmptyLevel();
+    }
     let cameraVelocity = 8 / 10000; // In screen quantile per millisecond...
     let cameraMaxZoomIn = 200;
     let cameraMaxZoomOut = 3000;
     let cameraScaleSpeed = 0.6; // In pixels per millisecond...
     
+    async function _saveLevel(banner, filename, levelData) {
+        try {
+            let result = await runPython(_saveLevelCode(filename, JSON.stringify(levelData, null, 4)));
+            banner.setText("Saved Successfully.", 1500);
+        } catch(exp) {
+            banner.setText(exp, 3000);
+        }
+    }
     
     function _deleteBlock(blockX, blockY, loadedChunk, chunkSize) {
         blockX = Math.floor(blockX % chunkSize);
@@ -582,6 +640,39 @@ elem_proto.levelEditor = async function(levelPath = null, blockTypes = [], entit
     function _setPlayer(blockX, blockY, gameState, playerType, blockSize, sprites) {
         if(playerType != null) {
             gameState.level.player = new playerType(blockX, blockY, blockSize, sprites);
+        }
+    }
+    
+    class BannerDisplay {
+        constructor(gameState) {
+            this._g = gameState;
+            this._text = "";
+            this._timeLeft = 0;
+            this._style = null;
+            this._color = null;
+        }
+        
+        setText(text = "", time = 3000, color = "black", style = "30px Arial") {
+            this._text = text;
+            this._timeLeft = time;
+            this._style = style;
+            this._color = color;
+        }
+        
+        update(timeStep) {
+            this._timeLeft = Math.max(0, this._timeLeft - timeStep);
+        }
+        
+        draw() {
+            if(this._timeLeft > 0) {
+                let {width, height} = this._g.canvas;
+                
+                this._g.painter.fillStyle = this._color;
+                this._g.painter.font = this._style;
+                this._g.painter.textAlign = "center";
+                
+                this._g.painter.fillText(this._text, width / 2, height / 2);
+            }
         }
     }
     
@@ -722,6 +813,62 @@ elem_proto.levelEditor = async function(levelPath = null, blockTypes = [], entit
         }
     }
     
+    class ActionBar extends GameObject {
+        constructor(x, y, blockSize, sprites) {
+            super(x, y, blockSize, sprites);
+            this._sprites = [sprites["_levelEditSave"].buildSprite(), sprites["_levelEditHitbox"].buildSprite()];
+            this._action = ["save", "hitbox"];
+            this._itemSize = blockSize;
+            this._wasPressed = false;
+            this._hovered = null;
+            this._clicked = true;
+            this._overbar = false;
+            this._x = null;
+            this._y = null;
+        }
+        
+        update(timeStep, gameState) {
+            this._clicked = false;
+            
+            let [cx, cy] = gameState.camera.reverseTransform(gameState.mouseLocation);
+            let [gx, gy, gw, gh] = gameState.camera.getBounds();
+            [this._x, this._y] = [gx, gy + gh];
+            
+            let overObj = Math.floor((cx - gx) / this._itemSize);
+            this._hovered = ((cy >= ((gy + gh - this._itemSize)) && (overObj < this._action.length)))? overObj: null;
+            this._overbar = this._hovered != null
+            this._clicked = this._overbar && this._wasPressed && !gameState.mousePressed;
+            
+            this._wasPressed = gameState.mousePressed;
+        }
+        
+        getOverBar() {
+            return this._overbar;
+        }
+        
+        getClicked() {
+            return (this._clicked)? this._action[this._hovered]: null; 
+        }
+        
+        draw(canvas, painter, camera) {            
+            for(let i = 0; i < this._sprites.length; i++) {
+                let [x, y, w, h] = camera.transformBox(
+                    [this._x + i * this._itemSize, this._y - this._itemSize, this._itemSize, this._itemSize]
+                );
+                
+                painter.fillStyle = "white";
+                painter.fillRect(x, y, w, h);
+                
+                this._sprites[i].draw(painter, x, y, w, h);
+                
+                if(this._hovered == i) {
+                    painter.fillStyle = "rgba(46, 187, 230, 0.5)";
+                    painter.fillRect(x, y, w, h);
+                }
+            }
+        }
+    }
+    
     function update(timeStep, gameState) {
         let keys = gameState.keysPressed;
         let c = gameState.camera;
@@ -742,8 +889,11 @@ elem_proto.levelEditor = async function(levelPath = null, blockTypes = [], entit
         c.setCenterPoint([cx, cy]);
         c.update();
         
-        gameState.hoverIndicator.update(timeStep, gameState);
-        gameState.selectorBar.update(timeStep, gameState);
+        gameState.__levelHoverIndicator.update(timeStep, gameState);
+        gameState.__levelSelectorBar.update(timeStep, gameState);
+        gameState.__levelActionBar.update(timeStep, gameState);
+        gameState.__levelDisplayBanner.update(timeStep);
+        
         gameState.loadedChunks = _manageChunks(
             level, gameState.camera, gameState.loadedChunks, 
             gameState.blockTypes, gameState.entityTypes, 
@@ -751,13 +901,14 @@ elem_proto.levelEditor = async function(levelPath = null, blockTypes = [], entit
         );
         
         // We check if user has clicked a location with a item in the toolbar selected...
-        let [selLocX, selLocY] = gameState.hoverIndicator.getBlockLocation();
+        let [selLocX, selLocY] = gameState.__levelHoverIndicator.getBlockLocation();
         let blockLoc = [Math.floor(selLocX), Math.floor(selLocY)];
-        let selection = gameState.selectorBar.getSelection();
+        let selection = gameState.__levelSelectorBar.getSelection();
         if(
             (!gameState.clickWasDown || (gameState.lastBlockLocation.join() != blockLoc.join())) 
-            && !gameState.selectorBar.getOverBar() && (selection != null) 
+            && !gameState.__levelSelectorBar.getOverBar() && (selection != null) 
             && (selLocX != null) && gameState.mousePressed
+            && !gameState.__levelActionBar.getOverBar()
         ) {
             let chunk = _findChunk(Math.floor(selLocX / level.chunkSize), Math.floor(selLocY / level.chunkSize), gameState.loadedChunks);
             if(chunk != null) {
@@ -784,6 +935,18 @@ elem_proto.levelEditor = async function(levelPath = null, blockTypes = [], entit
                         break;
                 }
             }
+        }
+        
+        switch(gameState.__levelActionBar.getClicked()) {
+            case "save":
+                gameState.__levelDisplayBanner.setText("Saving Results!", Infinity);
+                _flushLoadedChunks(level, gameState.loadedChunks);
+                _saveLevel(gameState.__levelDisplayBanner, levelPath, level);
+                break;
+            case "hitbox":
+                gameState.__levelShowHitboxes = !gameState.__levelShowHitboxes;
+                gameState.__levelDisplayBanner.setText("Toggling Hitboxes " + ((gameState.__levelShowHitboxes)? "On": "Off"), 1000);
+                break;
         }
         
         gameState.lastBlockLocation = blockLoc;
@@ -816,26 +979,48 @@ elem_proto.levelEditor = async function(levelPath = null, blockTypes = [], entit
             
             for(let entity of chunk.entities) {
                 entity.draw(canvas, painter, gameState.camera);
+                
+                if(gameState.__levelShowHitboxes) {
+                    painter.strokeStyle = "red";
+                    painter.strokeRect(...gameState.camera.transformBox(entity.getHitBox().map((val) => val * level.blockSize)));
+                }
             }
         }
         
         if(gameState.level.player != null) {
             gameState.level.player.draw(canvas, painter, gameState.camera);
+            
+            if(gameState.__levelShowHitboxes) {
+                painter.strokeStyle = "red";
+                painter.strokeRect(...gameState.camera.transformBox(gameState.level.player.getHitBox().map((val) => val * level.blockSize)));
+            }
         }
         
-        let [selLocX, selLocY] = gameState.hoverIndicator.getBlockLocation();
-        if((selLocX != null) && !gameState.selectorBar.getOverBar() && gameState.hoverIndicator.getLocation()) {
-            gameState.hoverIndicator.draw(canvas, painter, gameState.camera);
+        let [selLocX, selLocY] = gameState.__levelHoverIndicator.getBlockLocation();
+        if(
+            (selLocX != null) && !gameState.__levelSelectorBar.getOverBar() 
+            && !gameState.__levelActionBar.getOverBar() 
+            && gameState.__levelHoverIndicator.getLocation()
+        ) {
+            gameState.__levelHoverIndicator.draw(canvas, painter, gameState.camera);
         }
         
-        gameState.selectorBar.draw(canvas, painter, gameState.camera);
+        gameState.__levelSelectorBar.draw(canvas, painter, gameState.camera);
+        gameState.__levelActionBar.draw(canvas, painter, gameState.camera);
+        
+        gameState.__levelDisplayBanner.draw();
     }
     
     function gameLoop(timeStep, gameState) {
-        if(gameState.hoverIndicator == null) {
-            gameState.hoverIndicator = new GameHoverBlock(0, 0, level.blockSize, gameState.sprites);
-            gameState.selectorBar = new GameSelectPanel(0, 0, level.blockSize, gameState.sprites);
+        if(gameState.__levelHoverIndicator == null) {
+            gameState.__levelHoverIndicator = new GameHoverBlock(0, 0, level.blockSize, gameState.sprites);
+            gameState.__levelSelectorBar = new GameSelectPanel(0, 0, level.blockSize, gameState.sprites);
+            gameState.__levelActionBar = new ActionBar(0, 0, level.blockSize, gameState.sprites);
+            gameState.__levelDisplayBanner = new BannerDisplay(gameState);
             gameState.level = level;
+            if(gameState.level.player != null) {
+                gameState.level.player = (gameState.playerType != null)? gameState.playerType.fromJSON(gameState.level.player, gameState.level.blockSize, gameState.sprites): null;
+            }
         }
         
         update(timeStep, gameState);
@@ -849,6 +1034,7 @@ elem_proto.levelEditor = async function(levelPath = null, blockTypes = [], entit
     gameState.lastBlockLocation = null;
     gameState.clickWasDown = false;
     gameState.playerType = playerType;
+    gameState.__levelShowHitboxes = false;
     
     let data = {...levelData};
     
@@ -863,6 +1049,12 @@ elem_proto.levelEditor = async function(levelPath = null, blockTypes = [], entit
         },
         "_levelEditDelete": {
             "image": "levelEdit/deleteSelected.png",
+        },
+        "_levelEditSave": {
+            "image": "levelEdit/save.png"
+        },
+        "_levelEditHitbox": {
+            "image": "levelEdit/hitbox.png"
         }
     }
     data.sprites = (data.sprites != null)? {...data.sprites, ...levelEditSprites}: levelEditSprites;
