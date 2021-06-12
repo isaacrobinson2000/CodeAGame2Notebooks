@@ -106,9 +106,11 @@ class Sprite {
     }
     
     setAnimation(animationName) {
-        self._selected = ((animationName == null) || !(animationName in this._animations))? null: animationName;
+        if(animationName === this._selected) return;
         
-        let anim = (self._selected != null)? this._animations[self._selected]: {};
+        this._selected = ((animationName == null) || !(animationName in this._animations))? null: animationName;
+        
+        let anim = (this._selected != null)? this._animations[this._selected]: {};
         
         // Update properties...
         this._speed = ((anim.speed == null) || (anim.speed < 1))? 16: anim.speed;
@@ -1107,21 +1109,21 @@ elem_proto.makeGame = async function(levelPath, blockTypes = [], entityTypes = [
         return [ex, ey];
     }
     
-    function _handleCollisions(loadedChunks, chunkSize, numChunks, player) {
+    function _handleCollisions(loadedChunks, chunkSize, numChunks, player, gameState) {
         // Bound value, then compute floored division and modulo...
         let bounddivmod = (x, y, xlow, xhigh, bounding_func = Math.floor) => {
             x = _bound(x, xlow, xhigh);
-            return [Math.floor(x / y), bounding_func(x % y)];
+            return [bounding_func(x / y), bounding_func(x % y)];
         }
         
         let chunkLookup = {};
         for(let [cx, cy, chunk] of loadedChunks) chunkLookup[[cx, cy]] = chunk;
-        
+                
         // Going over every entity in every loaded chunk...
         for(let ci = 0; ci < loadedChunks.length; ci++) {
             let [cx, cy, chunk] = loadedChunks[ci];
             
-            for(let i = ((ci == 0)? -1: 0); i < chunk.entities; i++) {
+            for(let i = ((ci == 0)? -1: 0); i < chunk.entities.length; i++) {
                 // -1 indicates index of the player...
                 let entity1 = (i < 0)? player: chunk.entities[i];
                 
@@ -1144,14 +1146,25 @@ elem_proto.makeGame = async function(levelPath, blockTypes = [], entityTypes = [
                                 
                                 if(block != null) {
                                     // If block is not null, perform collision check with entity...
-                                    if("onCollision" in entity1) {
-                                        if(entity1.onCollision(block) && (i >= 0)) {
-                                            _popAndSwapWithEnd(chunk.entities, i);
+                                    let [x2, y2, w2, h2] = block.getHitBox();
+                                    
+                                    let [dx, dy, dw, dh] = gameState.camera.transformBox([x2 * gameState.level.blockSize, y2 * gameState.level.blockSize, w2 * gameState.level.blockSize, h2 * gameState.level.blockSize]);
+                                    gameState.painter.fillStyle = "blue";
+                                    gameState.painter.fillRect(dx, dy, dw, dh);
+                                    
+                                    if(
+                                        !((x2 >= (x1 + w1)) || ((x2 + w2) <= x1)) // If we collide on x-values
+                                        && !((y2 >= (y1 + h1)) || ((y2 + h2) <= y1)) // and y values... (boxes overlap).
+                                    ) {
+                                        if("onCollision" in entity1) {
+                                            if(entity1.onCollision(block) && (i >= 0)) {
+                                                _popAndSwapWithEnd(chunk.entities, i);
+                                            }
                                         }
-                                    }
-                                    if("onCollision" in block) {
-                                        if(block.onCollision(entity1)) {
-                                            chunkLookup[[cxb, cyb]].blocks[bx][by] = null;
+                                        if("onCollision" in block) {
+                                            if(block.onCollision(entity1)) {
+                                                chunkLookup[[cxb, cyb]].blocks[bx][by] = null;
+                                            }
                                         }
                                     }
                                 }
@@ -1164,14 +1177,14 @@ elem_proto.makeGame = async function(levelPath, blockTypes = [], entityTypes = [
                 for(let cj = ci + 1; cj < loadedChunks.length; cj++) {
                     let [cx2, cy2, chunk2] = loadedChunks[cj]
                     
-                    for(let j = ((ci == cj)? i + 1: 0); j < chunk.entities; j++) {
+                    for(let j = ((ci == cj)? i + 1: 0); j < chunk.entities.length; j++) {
                         let entity2 = chunk.entities[j];
                         let [x2, y2, w2, h2] = entity2.getHitBox();
                         
                         // Collision checks....
                         if(
-                            !((x2 > (x1 + w1)) || ((x2 + w2) < x1)) // If we collide on x-values
-                            && !((y2 > (y1 + h1)) || ((y2 + h2) < y1)) // and y values... (boxes overlap).
+                            !((x2 >= (x1 + w1)) || ((x2 + w2) <= x1)) // If we collide on x-values
+                            && !((y2 >= (y1 + h1)) || ((y2 + h2) <= y1)) // and y values... (boxes overlap).
                         ) {
                             if("onCollision" in entity1) {
                                 if(entity1.onCollision(entity2) && (i >= 0)) {
@@ -1267,7 +1280,7 @@ elem_proto.makeGame = async function(levelPath, blockTypes = [], entityTypes = [
         _reboundEntity(gameState.__player, chunkSize, numChunks);
         
         // Handle collisions between objects.... (Expensive...)
-        _handleCollisions(gameState.loadedChunks, chunkSize, numChunks, gameState.__player);
+        _handleCollisions(gameState.loadedChunks, chunkSize, numChunks, gameState.__player, gameState);
         
         // Finally, update the camera...
         gameState.camera.update(gameState.level.numChunks.map((v) => v * gameState.level.blockSize * gameState.level.chunkSize));
@@ -1281,8 +1294,8 @@ elem_proto.makeGame = async function(levelPath, blockTypes = [], entityTypes = [
     
     function draw(canvas, painter, gameState) {
         // Clear the canvas...
-        painter.fillStyle = "white"
-        painter.fillRect(0, 0, canvas.width, canvas.height);
+        //painter.fillStyle = "white"
+        //painter.fillRect(0, 0, canvas.width, canvas.height);
         
         // Draw all entities/blocks...
         for(let [cx, cy, chunk] of gameState.loadedChunks) {
