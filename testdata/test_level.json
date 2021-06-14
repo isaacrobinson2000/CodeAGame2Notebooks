@@ -3168,7 +3168,11 @@
                         null,
                         null,
                         null,
-                        null,
+                        {
+                            "_$type": "GameBlock",
+                            "x": 18,
+                            "y": 8
+                        },
                         null,
                         {
                             "_$type": "GameBlock",
