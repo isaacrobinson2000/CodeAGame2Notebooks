@@ -1109,7 +1109,7 @@ elem_proto.makeGame = async function(levelPath, blockTypes = [], entityTypes = [
         return [ex, ey];
     }
     
-    function _handleCollisions(loadedChunks, chunkSize, numChunks, player, gameState) {
+    function _handleCollisions(loadedChunks, chunkSize, numChunks, player) {
         // Bound value, then compute floored division and modulo...
         let boundNFloor = (x, xlow, xhigh, bounding_func = Math.floor) => {
             x = _bound(x, xlow, xhigh);
@@ -1151,10 +1151,6 @@ elem_proto.makeGame = async function(levelPath, blockTypes = [], entityTypes = [
                         if(block != null) {
                             // If block is not null, perform collision check with entity...
                             let [x2, y2, w2, h2] = block.getHitBox();
-                            
-                            let [dx, dy, dw, dh] = gameState.camera.transformBox([x2 * gameState.level.blockSize, y2 * gameState.level.blockSize, w2 * gameState.level.blockSize, h2 * gameState.level.blockSize]);
-                            gameState.painter.fillStyle = "blue";
-                            gameState.painter.fillRect(dx, dy, dw, dh);
                             
                             if(
                                 !((x2 >= (x1 + w1)) || ((x2 + w2) <= x1)) // If we collide on x-values
@@ -1293,7 +1289,7 @@ elem_proto.makeGame = async function(levelPath, blockTypes = [], entityTypes = [
         _reboundEntity(gameState.__player, chunkSize, numChunks);
         
         // Handle collisions between objects.... (Expensive...)
-        _handleCollisions(gameState.loadedChunks, chunkSize, numChunks, gameState.__player, gameState);
+        _handleCollisions(gameState.loadedChunks, chunkSize, numChunks, gameState.__player);
         
         // Finally, update the camera...
         gameState.camera.update(gameState.level.numChunks.map((v) => v * gameState.level.blockSize * gameState.level.chunkSize));
