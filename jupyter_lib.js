@@ -1203,6 +1203,17 @@ elem_proto.makeGame = async function(levelPath, blockTypes = [], entityTypes = [
                 }
             }
         }
+        
+        for(let [cx, cy, chunk] of loadedChunks) {
+            for(let blockCol of chunk.blocks) {
+                for(let block of blockCol) {
+                    if((block != null) && ("onCollisionEnd" in block)) block.onCollisionEnd();
+                }
+            }
+            for(let entity of [player, ...chunk.entities]) {
+                if("onCollisionEnd" in entity) entity.onCollisionEnd();
+            }
+        }
     }
     
     function gameLoop(timeStep, gameState) {

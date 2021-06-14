@@ -7,8 +7,8 @@
     ],
     "player": {
         "_$type": "Player",
-        "x": 1.1772861459594641,
-        "y": 9.007857194201316
+        "x": 1.6596772532725264,
+        "y": 8.308382901261805
     },
     "chunks": [
         [
@@ -9059,7 +9059,11 @@
                         null,
                         null,
                         null,
-                        null
+                        {
+                            "_$type": "GameBlock",
+                            "x": 38,
+                            "y": 159
+                        }
                     ],
                     [
                         null,
@@ -9076,7 +9080,11 @@
                         null,
                         null,
                         null,
-                        null,
+                        {
+                            "_$type": "GameBlock",
+                            "x": 39,
+                            "y": 158
+                        },
                         null
                     ],
                     [
@@ -11910,7 +11918,11 @@
                         null,
                         null,
                         null,
-                        null,
+                        {
+                            "_$type": "GameBlock",
+                            "x": 48,
+                            "y": 158
+                        },
                         null
                     ],
                     [
@@ -11929,7 +11941,11 @@
                         null,
                         null,
                         null,
-                        null
+                        {
+                            "_$type": "GameBlock",
+                            "x": 49,
+                            "y": 159
+                        }
                     ],
                     [
                         null,
