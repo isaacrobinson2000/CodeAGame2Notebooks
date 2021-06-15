@@ -181,12 +181,13 @@ function _bound(val, low, high) {
 }
 
 class Camera {
-    constructor(canvas, minPixelsShown) {
+    constructor(canvas, minPixelsShown, trackBoxRatio = 1 / 3) {
         this._canvas = canvas;
         this._minPixelsShown = minPixelsShown;
         this._zoom = 1;
         this._track = null;
         this._centerPoint = [0, 0];
+        this._trackBoxRatio = trackBoxRatio;
     }
     
     setCenterPoint(cp) {
@@ -216,10 +217,27 @@ class Camera {
         if((this._track != null) && ("getHitBox" in this._track)) {
             let [x, y, w, h] = this._track.getHitBox().map((val) => val * this._track._blockSize);
             
-            this._centerPoint = [x - w / 2, y - h / 2];
+            // If object is not within track box, move the track box to put it in bounds....
+            let [cx, cy, cw, ch] = this.getBounds();
+            let [centX, centY] = this._centerPoint;
+            let trackBox = [
+                centX - this._trackBoxRatio * (cw / 2), 
+                centY - this._trackBoxRatio * (ch / 2), 
+                this._trackBoxRatio * cw, 
+                this._trackBoxRatio * ch
+            ];
+            
+            // Move x coordinate of tracking box over the tracked object.
+            if(x < trackBox[0]) trackBox[0] = x;
+            else if(x > (trackBox[0] + trackBox[2])) trackBox[0] = x - trackBox[2];
+            // Move y coordinate also...
+            if(y < trackBox[1]) trackBox[1] = y;
+            else if(y > (trackBox[1] + trackBox[3])) trackBox[1] = y - trackBox[3];
+            
+            this._centerPoint = [trackBox[0] + trackBox[2] / 2, trackBox[1] + trackBox[3] / 2];
             
             // Bound the camera...
-            let [cx, cy, cw, ch] = this.getBounds();
+            [cx, cy, cw, ch] = this.getBounds();
             let [xOut, yOut] = [this._centerPoint[0] - cx, this._centerPoint[1] - cy];
             
             let [newCx, newCy] = [_bound(cx, 0, levelBounds[0] - cw), _bound(cy, 0, levelBounds[1] - ch)];
