@@ -494,6 +494,128 @@ class GameObject {
 window.GameObject = GameObject;
 
 
+class GameCollisionObject extents GameObject {
+    constructor(x, y, blockSize, sprites) {
+        super(x, y, blockSize, sprites);
+        
+        this._vx = null;
+        this._vy = null;
+        this._colList = [];
+        this._collisionSides = {"left", "top", "right", "bottom"};
+        this._movable = false;
+    }
+    
+    _intersection(boxSeg, dvec, boxSeg2) {
+        // PRIVATE: Tests 2 borders for colision withing the time step.
+        let [pt, ax, len] = boxSeg;
+        let [pt2, ax2, len2] = boxSeg2;
+        
+        if(ax != ax2) return [Infinity, 0];
+        
+        let opAx = (ax + 1) % 2;
+        let t = (pt[opAx] - pt2[opAx]) / dvec[opAx];
+        
+        if(t != t) return [Infinity, 0];
+        
+        let res = pt[ax] + dvec[ax] * t;
+        if((res + len < pt[ax]) || (pt[ax] + len2 < res)) return [Infinity, 0];
+        
+        let segOverlap = Math.max.apply(
+            null, [pt[ax] - (res + len), (pt[ax] + len2) - res].map(Math.abs)
+        );
+        
+        if(t < 0 || t > 1) return [Infinity, 0];
+        
+        return [t, segOverlap];
+    }
+    
+    getCollisionSides() {
+        let [x, y, w, h] = this.getHitBox();
+        
+        // Build hitbox sides...
+        let sides = [
+            [[x, y + h], 0, w],
+            [[x, y], 0, w],
+            [[x + w, y], 1, h],
+            [[x, y], 1, h]
+        ];
+        let sideNames = ["bottom", "top", "right", "left"];
+        
+        for(let i = 0; i < sideNames.length; i++) {
+            sides[i] = (this._collisionSides[sideNames[i]])? sides[i]: null;
+        }
+        
+        return sides;
+    }
+    
+    _sign(val) {
+        if(val < 0) return -1;
+        if(val > 0) return 1;
+        return 0;
+    }
+    
+    onCollision(object) {
+        if(this._movable && (other instanceof GameCollisionObject)) {
+            let [bx, by, bw, bh] = other.getHitBox();
+            let [plx, ply, plw, plh] = this.getHitBox();
+            // Gives us direction of move...
+            let [dx, dy] = [this._vx, this._vy];
+
+            let oSides = other.getCollisionSides();
+            
+            let thisSides = this.getCollisionSides().map((v) => [[v[0][0] - dx, v[0][1] - dy], v[1], v[2]]);
+            let sideSwap = [1, 0, 3, 2];
+            for(let i = 0; i < sideSwap.length; i++) thisSides[i] = thisSides[sideSwap[i]];
+            
+            let bestTime = [Infinity, 0];
+            let bestBound = null;
+            
+            for(let i = 0; i < thisSides.length; i++) {
+                if((oSides[i] == null) && (thisSides[i] == null)) continue;
+                let [time, overlap] = this._intersection(bSides[i], [dx, dy], pSides[i]);
+
+                if(bestTime[0] > time) {
+                    bestTime = [time, overlap];
+                    bestBound = bSides[i];
+                }
+            }
+            
+            this._colList.push([...bestTime, bestBound]);
+        }
+    }
+    
+    onCollisionEnd() {
+        // Sort collisions by time...
+        this._colList.sort((a, b) => a[0] - b[0]);
+        let [x, y, w, h] = this.getHitBox();
+        
+        let covered = [false, false];
+        
+        for(let [time, overlap, bound] of this._colList) {
+            if(bound != null) {
+                let [[x, y], ax, len] = bound;
+                
+                if(covered.every((v) => v)) break;
+                if(covered[ax]) continue;
+                covered[ax] = true;
+                
+                let cX = x - ((this._sign(this._vx) + 1) * w / 2);
+                let cY = y - ((this._sign(this._vy) + 1) * h / 2);
+                this._vx -= (ax == 0)? 0: this.x - cX;
+                this._vy -= (ax == 1)? 0: this.y - cY;
+                this.x = (ax == 0)? this.x: cX;
+                this.y = (ax == 1)? this.y: cY;
+            }
+        }
+        this._vx *= !covered[1];
+        this._vy *= !covered[0];
+        this._colList = [];
+        
+        // TODO: handleCollision for subclasses to use...
+    }
+}
+
+
 function _loadChunk(cx, cy, level, blockTypes, entityTypes, sprites) {    
     let chunkSize = level.chunkSize;
     let newLoadedChunk = _makeEmptyChunk(chunkSize);
@@ -632,13 +754,14 @@ function _saveLevelCode(filename, levelData) {
     return LEVEL_EDIT_CODE;
 }
 
-elem_proto.levelEditor = async function(levelPath, blockTypes = [], entityTypes = [], levelData = {}, playerType = null) {
+elem_proto.levelEditor = async function(levelPath, blockTypes = [], entityTypes = [], levelData = {}, playerType = null, callbacks = {}) {
     let level;
     try {
         level = (levelPath == null)? _makeEmptyLevel(): await loadJSON(levelPath);
     } catch(exp) {
         level = _makeEmptyLevel();
     }
+    
     let cameraVelocity = 8 / 10000; // In screen quantile per millisecond...
     let cameraMaxZoomIn = 200;
     let cameraMaxZoomOut = 3000;
@@ -786,6 +909,8 @@ elem_proto.levelEditor = async function(levelPath, blockTypes = [], entityTypes 
         }
         
         update(timeStep, gameState) {
+            if("preUpdate" in callbacks) callbacks.preUpdate(timeStep, gameState);
+            
             if(this._blocks == null) {
                 this._blocks = _gameObjMappingToList(gameState.blockTypes);
                 this._entities = _gameObjMappingToList(gameState.entityTypes);
@@ -814,6 +939,8 @@ elem_proto.levelEditor = async function(levelPath, blockTypes = [], entityTypes 
             }
 
             this._deleteSprite.update(timeStep);
+            
+            if("postUpdate" in callbacks) callbacks.postUpdate(timeStep, gameState);
         }
         
         getOverBar() {
@@ -825,6 +952,8 @@ elem_proto.levelEditor = async function(levelPath, blockTypes = [], entityTypes 
         }
         
         draw(canvas, painter, camera) {
+            if("preDraw" in callbacks) callbacks.preDraw(canvas, painter, camera);
+            
             painter.fillStyle = "#dbdbdb";
             let [x, y, width, height] = camera.transformBox([this._x, this._y, this._width, this._itemSize * 2]);
             let step = height / 2;
@@ -856,6 +985,8 @@ elem_proto.levelEditor = async function(levelPath, blockTypes = [], entityTypes 
                 let [idxOff, yOff] = (this._selected[0] == "block")? [1, step]: [2, 0];
                 painter.fillRect(x + (this._selected[1] + idxOff) * step, (this._selected[0] == "block")? y + yOff: y, step, step);
             }
+            
+            if("postDraw" in callbacks) callbacks.postDraw(canvas, painter, camera);
         }
     }
     
@@ -1109,7 +1240,7 @@ elem_proto.levelEditor = async function(levelPath, blockTypes = [], entityTypes 
 }
 
 
-elem_proto.makeGame = async function(levelPath, blockTypes = [], entityTypes = [], levelData = {}, playerType = null) {    
+elem_proto.makeGame = async function(levelPath, blockTypes = [], entityTypes = [], levelData = {}, playerType = null, callbacks = {}, minPixelsShown = null) {    
     let gameState = {};
     gameState.entityTypes = _gameObjListToMapping(entityTypes);
     gameState.blockTypes = _gameObjListToMapping(blockTypes);
@@ -1127,7 +1258,23 @@ elem_proto.makeGame = async function(levelPath, blockTypes = [], entityTypes = [
         return [ex, ey];
     }
     
-    function _handleCollisions(loadedChunks, chunkSize, numChunks, player) {
+    function _buildChunkLookup(loadedChunks) {
+        let chunkLookup = {};
+        for(let [cx, cy, chunk] of loadedChunks) chunkLookup[[cx, cy]] = chunk;
+        
+        return chunkLookup;
+    }
+    
+    function _resetLevel(gameState) {
+        gameState.level = JSON.parse(JSON.stringify(gameState.__origLevel));
+        for(let prop in gameState.level.player) {
+            gameState.__player[prop] = gameState.level.player[prop];
+        }
+        gameState.loadedChunks = [];
+        gameState.chunkLookup = {};
+    }
+    
+    function _handleCollisions(loadedChunks, chunkLookup, chunkSize, numChunks, player, gameState) {
         // Bound value, then compute floored division and modulo...
         let boundNFloor = (x, xlow, xhigh, bounding_func = Math.floor) => {
             x = _bound(x, xlow, xhigh);
@@ -1135,9 +1282,6 @@ elem_proto.makeGame = async function(levelPath, blockTypes = [], entityTypes = [
         }
         
         let divmod = (x, y) => [Math.floor(x / y), Math.floor(x % y)];
-        
-        let chunkLookup = {};
-        for(let [cx, cy, chunk] of loadedChunks) chunkLookup[[cx, cy]] = chunk;
                 
         // Going over every entity in every loaded chunk...
         for(let ci = 0; ci < loadedChunks.length; ci++) {
@@ -1176,7 +1320,13 @@ elem_proto.makeGame = async function(levelPath, blockTypes = [], entityTypes = [
                             ) {
                                 if("onCollision" in entity1) {
                                     if(entity1.onCollision(block) && (i >= 0)) {
-                                        _popAndSwapWithEnd(chunk.entities, i);
+                                        if(i >= 0) {
+                                            _popAndSwapWithEnd(chunk.entities, i);
+                                        }
+                                        else {
+                                            _resetLevel(gameState);
+                                            return;
+                                        }
                                     }
                                 }
                                 if("onCollision" in block) {
@@ -1203,8 +1353,14 @@ elem_proto.makeGame = async function(levelPath, blockTypes = [], entityTypes = [
                             && !((y2 >= (y1 + h1)) || ((y2 + h2) <= y1)) // and y values... (boxes overlap).
                         ) {
                             if("onCollision" in entity1) {
-                                if(entity1.onCollision(entity2) && (i >= 0)) {
-                                    _popAndSwapWithEnd(chunk.entities, i);
+                                if(entity1.onCollision(entity2)) {
+                                    if(i >= 0) {
+                                        _popAndSwapWithEnd(chunk.entities, i);
+                                    }
+                                    else {
+                                        _resetLevel(gameState);
+                                        return;
+                                    }
                                 }
                             }
                             if("onCollision" in entity2) {
@@ -1234,8 +1390,40 @@ elem_proto.makeGame = async function(levelPath, blockTypes = [], entityTypes = [
         // Setup player object if we just started the game...
         if(gameState.__player == null) {
             let lvl = gameState.level;
+            gameState.__origLevel = JSON.parse(JSON.stringify(lvl));
             gameState.__player = gameState.playerType.fromJSON(lvl.player, lvl.blockSize, gameState.sprites);
             gameState.camera.setTrackedObject(gameState.__player);
+            gameState.chunkLookup = {};
+            
+            // Some methods to allow entities/blocks to add other entities/blocks to the game...
+            gameState.addEntity = function(entity) {
+                let [ex, ey] = _reboundEntity(entity, this.level.chunkSize, this.level.numChunks);
+                [ex, ey] = [Math.floor(ex / this.level.chunkSize), Math.floor(ey / this.level.chunkSize)];
+                
+                if([ex, ey] in this.chunkLookup) {
+                    this.chunkLookup[[ex, ey]].entities.push(entity);
+                    return;
+                }
+                
+                this.level.chunks[ex][ey].entities.push(entity.toJSON());
+            };
+            
+            gameState.addBlock = function(block) {
+                let [bx, by] = _reboundEntity(block, this.level.chunkSize, this.level.numChunks);
+                let [cx, cy] = [Math.floor(ex / this.level.chunkSize), Math.floor(ey / this.level.chunkSize)];
+                
+                block.x = Math.floor(bx);
+                block.y = Math.floor(by);
+                let subBX = bx % this.level.chunkSize;
+                let subBY = by % this.level.chunkSize;
+                
+                if([cx, cy] in this.chunkLookup) {
+                    this.chunkLookup[[cx, cy]].blocks[subBX][subBY] = block;
+                    return;
+                }
+                
+                this.level.chunks[cx][cy].blocks[subBX][subBY] = block.toJSON();
+            };
         }
         
         update(timeStep, gameState);
@@ -1243,6 +1431,10 @@ elem_proto.makeGame = async function(levelPath, blockTypes = [], entityTypes = [
     }
     
     function update(timeStep, gameState) {
+        if("preUpdate" in callbacks) {
+            if(callbacks.preUpdate(timeStep, gameState)) return;
+        }
+
         // Used heavily below...
         let chunkSize = gameState.level.chunkSize;
         let numChunks = gameState.level.numChunks;
@@ -1303,11 +1495,14 @@ elem_proto.makeGame = async function(levelPath, blockTypes = [], entityTypes = [
         }
         
         // Update the player... Bound player to game zone...
-        gameState.__player.update(timeStep, gameState);
+        if(gameState.__player.update(timeStep, gameState)) {
+            _resetLevel(gameState);
+            return;
+        };
         _reboundEntity(gameState.__player, chunkSize, numChunks);
         
         // Handle collisions between objects.... (Expensive...)
-        _handleCollisions(gameState.loadedChunks, chunkSize, numChunks, gameState.__player);
+        _handleCollisions(gameState.loadedChunks, gameState.chunkLookup, chunkSize, numChunks, gameState.__player, gameState);
         
         // Finally, update the camera...
         gameState.camera.update(gameState.level.numChunks.map((v) => v * gameState.level.blockSize * gameState.level.chunkSize));
@@ -1317,12 +1512,19 @@ elem_proto.makeGame = async function(levelPath, blockTypes = [], entityTypes = [
             gameState.level, gameState.camera, gameState.loadedChunks, 
             gameState.blockTypes, gameState.entityTypes, gameState.sprites
         );
+        gameState.chunkLookup = _buildChunkLookup(gameState.loadedChunks);
+        
+        if("postUpdate" in callbacks) callbacks.postUpdate(timeStep, gameState);
     }
     
     function draw(canvas, painter, gameState) {
         // Clear the canvas...
-        //painter.fillStyle = "white"
-        //painter.fillRect(0, 0, canvas.width, canvas.height);
+        painter.fillStyle = "white"
+        painter.fillRect(0, 0, canvas.width, canvas.height);
+        
+        if("preDraw" in callbacks) {
+            if(callbacks.preDraw(canvas, painter, gameState)) return;
+        }
         
         // Draw all entities/blocks...
         for(let [cx, cy, chunk] of gameState.loadedChunks) {
@@ -1337,8 +1539,10 @@ elem_proto.makeGame = async function(levelPath, blockTypes = [], entityTypes = [
             }
         }
         // Draw the player...
-        gameState.__player.draw(gameState.canvas, gameState.painter, gameState.camera);        
+        gameState.__player.draw(gameState.canvas, gameState.painter, gameState.camera);
+        
+        if("postDraw" in callbacks) callbacks.postDraw(canvas, painter, gameState);
     }
     
-    this.makeBaseGame(gameLoop, gameState, levelData);
+    this.makeBaseGame(gameLoop, gameState, levelData, (minPixelsShown != null)? minPixelsShown: 10 * 32);
 }
