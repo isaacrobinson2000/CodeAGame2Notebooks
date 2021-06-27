@@ -509,7 +509,7 @@ class GameCollisionObject extends GameObject {
         this._movable = false;
     }
     
-    _intersection(boxSeg, dvec, boxSeg2) {
+    _intersection(boxSeg, dvec, boxSeg2, dvec2) {
         // PRIVATE: Tests 2 borders for colision within the time step.
         let [pt, ax, len] = boxSeg;
         let [pt2, ax2, len2] = boxSeg2;
@@ -517,15 +517,16 @@ class GameCollisionObject extends GameObject {
         if(ax != ax2) throw "Axes did not match!";
         
         let opAx = (ax + 1) % 2;
-        let t = (pt[opAx] - pt2[opAx]) / dvec[opAx];
+        let t = (pt2[opAx] - pt[opAx]) / (dvec[opAx] - dvec2[opAx]);
         
         if(t != t) return [Infinity, 0];
         
         let res = pt[ax] + dvec[ax] * t;
-        if((res + len < pt[ax]) || (pt[ax] + len2 < res)) return [Infinity, 0];
+        let res2 = pt2[ax] + dvec2[ax] * t;
+        if((res + len < res2) || (res2 + len2 < res)) return [Infinity, 0];
         
         let segOverlap = Math.min.apply(
-            null, [pt[ax] - (res + len), (pt[ax] + len2) - res].map(Math.abs)
+            null, [res2 - (res + len), (res2 + len2) - res].map(Math.abs)
         );
         
         if(t < 0 || t > 1) return [Infinity, 0];
@@ -557,51 +558,54 @@ class GameCollisionObject extends GameObject {
         if(this._movable && (this._vx == null || this._vy == null)) {
             throw "Error: Must store velocity in _vx and _vy for game collision objects!";
         }
+        
+        if(this.constructor.name == "Player" && other.constructor.name == "Enemy") console.log("Collision!");
                 
         if(this._movable && (other instanceof GameCollisionObject)) {
             let [bx, by, bw, bh] = other.getHitBox();
             let [plx, ply, plw, plh] = this.getHitBox();
             // Gives us direction of move...
             let [dx, dy] = [this.x - this.___px, this.y - this.___py];
+            let [dx2, dy2] = [other.x - other.___px, other.y - other.___py];
 
-            let oSides = other.getCollisionSides();
+            let oSides = other.getCollisionSides().map((v) => [[v[0][0] - dx2, v[0][1] - dy2], v[1], v[2]]);
             
             let thisSides = this.getCollisionSides().map((v) => [[v[0][0] - dx, v[0][1] - dy], v[1], v[2]]);
             let sideSwap = GameCollisionObject.sideSwaps;
             thisSides = thisSides.map((e, i, a) => a[sideSwap[i]]);
             
             let bestTime = [Infinity, 0];
-            let bestBound = null;
+            let bestBoundIdx = null;
             let bestSideName = null;
             
             for(let i = 0; i < thisSides.length; i++) {
                 if((oSides[i] == null) && (thisSides[i] == null)) continue;
-                let [time, overlap] = this._intersection(oSides[i], [dx, dy], thisSides[i]);
+                let [time, overlap] = this._intersection(oSides[i], [dx, dy], thisSides[i], [dx2, dy2]);
 
                 if(bestTime[0] > time) {
                     bestTime = [time, overlap];
-                    bestBound = oSides[i];
+                    bestBoundIdx = i;
                     bestSideName = GameCollisionObject.sideNames[sideSwap[i]];
                 }
             }
             
             if(bestTime[0] != Infinity) {
-                this._colList.push([...bestTime, bestBound, other, bestSideName]);
+                this._colList.push([...bestTime, bestBoundIdx, other, bestSideName]);
             }
         }
     }
     
     onCollisionEnd() {
         // Sort collisions by time...
-        this._colList.sort((a, b) => a[0] - b[0]);
+        this._colList.sort((a, b) => b[0] - a[0]);
         let [x, y, width, height] = this.getHitBox();
         
         let objList = [];
         let covered = [false, false];
-        
-        for(let [time, overlap, bound, obj, name] of this._colList) {
-            if(bound != null) {
-                let [[x, y], ax, len] = bound;
+                
+        for(let [time, overlap, boundIdx, obj, name] of this._colList) {
+            if(boundIdx != null) {
+                let [[x, y], ax, len] = obj.getCollisionSides()[boundIdx];
                 
                 if(covered.every((v) => v)) break;
                 if(covered[ax]) continue;
@@ -609,18 +613,15 @@ class GameCollisionObject extends GameObject {
                 objList.push([obj, name]);
                 if(!this._movable) continue;
                 
-                if(this.constructor.name == "Player" && obj.constructor.name == "Enemy") {
-                    console.log([time, overlap, bound, obj, name]);
-                }
+                let sign = GameCollisionObject.sideSigns[boundIdx];
                 
-                let cX = x - ((Math.sign(this.x - this.___px) + 1) * width / 2);
-                let cY = y - ((Math.sign(this.y - this.___py) + 1) * height / 2);
+                let cX = x - ((sign + 1) * width / 2);
+                let cY = y - ((sign + 1) * height / 2);
                 this.x = (ax == 0)? this.x: cX;
                 this.y = (ax == 1)? this.y: cY;
-                
             }
         }
-        
+                
         this._vx *= !covered[1];
         this._vy *= !covered[0];
         this._colList = [];
@@ -633,6 +634,7 @@ class GameCollisionObject extends GameObject {
 }
 
 GameCollisionObject.sideNames = ["bottom", "top", "right", "left"];
+GameCollisionObject.sideSigns = [-1, 1, -1, 1];
 GameCollisionObject.sideSwaps = [1, 0, 3, 2];
 
 window.GameCollisionObject = GameCollisionObject;
@@ -1315,6 +1317,10 @@ elem_proto.makeGame = async function(levelPath, blockTypes = [], entityTypes = [
                 
                 let [x1, y1, w1, h1] = entity1.getHitBox();
                 
+                let blk = gameState.level.blockSize;
+                let [dx, dy, dw, dh] = gameState.camera.transformBox([x1 * blk, y1 * blk, w1 * blk, h1 * blk])
+                gameState.painter.strokeRect(dx, dy, dw, dh);
+                
                 // Handle any entity-block collisions....
                 let xbs = boundNFloor(x1, 0, (chunkSize * numChunks[0]) - 1);
                 let ybs = boundNFloor(y1, 0, (chunkSize * numChunks[1]) - 1);
@@ -1362,18 +1368,18 @@ elem_proto.makeGame = async function(levelPath, blockTypes = [], entityTypes = [
                 }
 
                 // Now handle any entity-entity collisions...
-                for(let cj = ci + 1; cj < loadedChunks.length; cj++) {
+                for(let cj = ci; cj < loadedChunks.length; cj++) {
                     let [cx2, cy2, chunk2] = loadedChunks[cj]
                     
-                    for(let j = ((ci == cj)? i + 1: 0); j < chunk.entities.length; j++) {
-                        let entity2 = chunk.entities[j];
+                    for(let j = ((ci == cj)? i + 1: 0); j < chunk2.entities.length; j++) {
+                        let entity2 = chunk2.entities[j];
                         let [x2, y2, w2, h2] = entity2.getHitBox();
                         
                         // Collision checks....
                         if(
                             !((x2 >= (x1 + w1)) || ((x2 + w2) <= x1)) // If we collide on x-values
                             && !((y2 >= (y1 + h1)) || ((y2 + h2) <= y1)) // and y values... (boxes overlap).
-                        ) {
+                        ) {                            
                             if("onCollision" in entity1) {
                                 if(entity1.onCollision(entity2)) {
                                     if(i >= 0) {
@@ -1543,8 +1549,8 @@ elem_proto.makeGame = async function(levelPath, blockTypes = [], entityTypes = [
     
     function draw(canvas, painter, gameState) {
         // Clear the canvas...
-        painter.fillStyle = "white"
-        painter.fillRect(0, 0, canvas.width, canvas.height);
+        //painter.fillStyle = "white"
+        //painter.fillRect(0, 0, canvas.width, canvas.height);
         
         if("preDraw" in callbacks) {
             if(callbacks.preDraw(canvas, painter, gameState)) return;
