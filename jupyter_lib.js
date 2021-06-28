@@ -504,12 +504,12 @@ class GameCollisionObject extends GameObject {
         this._vx = null;
         this._vy = null;
         
-        this._colList = [];
         this._collisionSides = {"left": true, "top": true, "right": true, "bottom": true};
         this._movable = false;
+        this.___covered = [false, false];
     }
     
-    _intersection(boxSeg, dvec, boxSeg2, dvec2) {
+    __intersection(boxSeg, dvec, boxSeg2, dvec2) {
         // PRIVATE: Tests 2 borders for colision within the time step.
         let [pt, ax, len] = boxSeg;
         let [pt2, ax2, len2] = boxSeg2;
@@ -519,23 +519,29 @@ class GameCollisionObject extends GameObject {
         let opAx = (ax + 1) % 2;
         let t = (pt2[opAx] - pt[opAx]) / (dvec[opAx] - dvec2[opAx]);
         
-        if(t != t) return [Infinity, 0];
+        if((t == Infinity) || (t == -Infinity)) return [Infinity, 0, null];
+        if(t != t) return [Infinity, 0, null];
         
         let res = pt[ax] + dvec[ax] * t;
         let res2 = pt2[ax] + dvec2[ax] * t;
-        if((res + len < res2) || (res2 + len2 < res)) return [Infinity, 0];
+        let overlapLoc = pt[opAx] + dvec[opAx] * t;
+        
+        if((res + len < res2) || (res2 + len2 < res)) return [Infinity, 0, null];
         
         let segOverlap = Math.min.apply(
             null, [res2 - (res + len), (res2 + len2) - res].map(Math.abs)
         );
         
-        if(t < 0 || t > 1) return [Infinity, 0];
+        if(t < 0 || t > 1) return [Infinity, 0, null];
         
-        return [t, segOverlap];
+        let boundAtCollision = [[(ax != 0)? overlapLoc: res2, (ax != 1)? overlapLoc: res2], ax, len2];
+                
+        return [t, segOverlap, boundAtCollision];
     }
     
-    getCollisionSides() {
+    __getCollisionSides() {
         let [x, y, w, h] = this.getHitBox();
+        [x, y] = [this.___px, this.___py];
         
         // Build hitbox sides...
         let sides = [
@@ -552,87 +558,131 @@ class GameCollisionObject extends GameObject {
         return sides;
     }
     
-    handleCollisions(objectList) {}
+    __getDisplacementVector() {
+        return [this.x - this.___px, this.y - this.___py];
+    }
+    
+    handleCollisions(obj, side) {}
     
     onCollision(other) {
         if(this._movable && (this._vx == null || this._vy == null)) {
             throw "Error: Must store velocity in _vx and _vy for game collision objects!";
         }
-        
-        if(this.constructor.name == "Player" && other.constructor.name == "Enemy") console.log("Collision!");
-                
+                        
         if(this._movable && (other instanceof GameCollisionObject)) {
-            let [bx, by, bw, bh] = other.getHitBox();
-            let [plx, ply, plw, plh] = this.getHitBox();
             // Gives us direction of move...
-            let [dx, dy] = [this.x - this.___px, this.y - this.___py];
-            let [dx2, dy2] = [other.x - other.___px, other.y - other.___py];
+            let [dx, dy] = this.__getDisplacementVector();
+            let [dx2, dy2] = other.__getDisplacementVector();
 
-            let oSides = other.getCollisionSides().map((v) => [[v[0][0] - dx2, v[0][1] - dy2], v[1], v[2]]);
+            let oSides = other.__getCollisionSides();
+            let thisSides = this.__getCollisionSides();
             
-            let thisSides = this.getCollisionSides().map((v) => [[v[0][0] - dx, v[0][1] - dy], v[1], v[2]]);
             let sideSwap = GameCollisionObject.sideSwaps;
             thisSides = thisSides.map((e, i, a) => a[sideSwap[i]]);
             
-            let bestTime = [Infinity, 0];
+            let bestTime = Infinity;
             let bestBoundIdx = null;
-            let bestSideName = null;
-            
+
             for(let i = 0; i < thisSides.length; i++) {
                 if((oSides[i] == null) && (thisSides[i] == null)) continue;
-                let [time, overlap] = this._intersection(oSides[i], [dx, dy], thisSides[i], [dx2, dy2]);
+                let [time, overlap, bound] = this.__intersection(thisSides[i], [dx, dy], oSides[i], [dx2, dy2]);
 
-                if(bestTime[0] > time) {
-                    bestTime = [time, overlap];
+                if(bestTime > time) {
+                    bestTime = time;
                     bestBoundIdx = i;
-                    bestSideName = GameCollisionObject.sideNames[sideSwap[i]];
                 }
             }
             
-            if(bestTime[0] != Infinity) {
-                this._colList.push([...bestTime, bestBoundIdx, other, bestSideName]);
+            if(bestTime != Infinity) {
+                GameCollisionObject.appendCollision(this, other, bestBoundIdx, bestTime);
             }
         }
+        
+        GameCollisionObject.finalPassDone = false;
+    }
+    
+    __collisionAdjust(bound, boundIdx) {
+        let [_x, _y, width, height] = this.getHitBox();
+        let [[x, y], ax, len] = bound;
+
+        if(this.___covered[ax]) return;
+        if(!this._movable) return;
+        this.___covered[ax] = true;
+
+        let sign = GameCollisionObject.sideSigns[boundIdx];
+
+        let cX = x - ((sign + 1) * width / 2);
+        let cY = y - ((sign + 1) * height / 2);
+        this.x = (ax == 0)? this.x: cX;
+        this.y = (ax == 1)? this.y: cY;
+        
+        this._vx *= !this.___covered[1];
+        this._vy *= !this.___covered[0];
     }
     
     onCollisionEnd() {
-        // Sort collisions by time...
-        this._colList.sort((a, b) => b[0] - a[0]);
-        let [x, y, width, height] = this.getHitBox();
-        
-        let objList = [];
-        let covered = [false, false];
-                
-        for(let [time, overlap, boundIdx, obj, name] of this._colList) {
-            if(boundIdx != null) {
-                let [[x, y], ax, len] = obj.getCollisionSides()[boundIdx];
-                
-                if(covered.every((v) => v)) break;
-                if(covered[ax]) continue;
-                covered[ax] = true;
-                objList.push([obj, name]);
-                if(!this._movable) continue;
-                
-                let sign = GameCollisionObject.sideSigns[boundIdx];
-                
-                let cX = x - ((sign + 1) * width / 2);
-                let cY = y - ((sign + 1) * height / 2);
-                this.x = (ax == 0)? this.x: cX;
-                this.y = (ax == 1)? this.y: cY;
-            }
-        }
-                
-        this._vx *= !covered[1];
-        this._vy *= !covered[0];
-        this._colList = [];
+        GameCollisionObject.manageAllCollisions();
         
         this.___px = this.x;
         this.___py = this.y;
+        this.___covered = [false, false];
+    }
+    
+    static manageAllCollisions() {
+        if(GameCollisionObject.finalPassDone) return;
         
-        this.handleCollisions(objList);
+        let colList = [];
+        for(let elem in GameCollisionObject.collisions) {
+            colList.push(GameCollisionObject.collisions[elem]);
+        }
+        colList.sort((a, b) => a[0]._movable - b[0], a[3] - b[3]);
+        
+        let sideSwap = GameCollisionObject.sideSwaps;
+        let sideNames = GameCollisionObject.sideNames;
+        
+        for(let [obj, otherObj, boundIdx, time] of colList) {
+            let dvec1 = obj.__getDisplacementVector();
+            let dvec2 = otherObj.__getDisplacementVector();
+            let thisB = obj.__getCollisionSides()[sideSwap[boundIdx]];
+            let otherB = otherObj.__getCollisionSides()[boundIdx];
+            
+            let [t, overlap, bound] = obj.__intersection(thisB, dvec1, otherB, dvec2);
+            
+            if(overlap <= 0 || bound == null) continue;
+            let [[x, y], ax, len] = bound;
+            
+            // Move both objects....
+            obj.__collisionAdjust(bound, boundIdx);
+            otherObj.__collisionAdjust(bound, sideSwap[boundIdx]);
+            // For extra functionality...
+            obj.handleCollisions(otherObj, sideNames[sideSwap[boundIdx]]);
+            otherObj.handleCollisions(obj, sideNames[boundIdx]);
+        }
+        
+        GameCollisionObject.objectIdx = 0;
+        GameCollisionObject.objectMapping.clear();
+        GameCollisionObject.collisions = {};
+        GameCollisionObject.finalPassDone = true;
+    }
+    
+    static appendCollision(obj, otherObj, boundIdx, time) {
+        if(!GameCollisionObject.objectMapping.has(obj)) GameCollisionObject.objectMapping.set(obj, GameCollisionObject.objectIdx++);
+        if(!GameCollisionObject.objectMapping.has(otherObj)) GameCollisionObject.objectMapping.set(otherObj, GameCollisionObject.objectIdx++);
+        
+        let i1 = GameCollisionObject.objectMapping.get(obj);
+        let i2 = GameCollisionObject.objectMapping.get(otherObj);
+        
+        let iLst = [i1, i2];
+        iLst.sort();
+        
+        if(!(iLst in GameCollisionObject.collisions)) GameCollisionObject.collisions[iLst] = [obj, otherObj, boundIdx, time];
     }
 }
 
+GameCollisionObject.objectIdx = 0;
+GameCollisionObject.objectMapping = new Map();
+GameCollisionObject.collisions = {};
+GameCollisionObject.finalPassDone = false;
 GameCollisionObject.sideNames = ["bottom", "top", "right", "left"];
 GameCollisionObject.sideSigns = [-1, 1, -1, 1];
 GameCollisionObject.sideSwaps = [1, 0, 3, 2];
