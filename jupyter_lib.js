@@ -528,12 +528,14 @@ class GameCollisionObject extends GameObject {
         
         if((res + len < res2) || (res2 + len2 < res)) return [Infinity, 0, null];
         
+        if(t > 1 || t < -5) return [Infinity, 0, null];
+        
         let segOverlap = Math.min.apply(
             null, [res2 - (res + len), (res2 + len2) - res].map(Math.abs)
         );
         
-        if(t < 0 || t > 1) return [Infinity, 0, null];
-        
+        if(t < 0) t = 1 + Math.abs(t);
+                
         let boundAtCollision = [[(ax != 0)? overlapLoc: res2, (ax != 1)? overlapLoc: res2], ax, len2];
                 
         return [t, segOverlap, boundAtCollision];
@@ -584,7 +586,7 @@ class GameCollisionObject extends GameObject {
             let bestBoundIdx = null;
 
             for(let i = 0; i < thisSides.length; i++) {
-                if((oSides[i] == null) && (thisSides[i] == null)) continue;
+                if((oSides[i] == null) || (thisSides[i] == null)) continue;
                 let [time, overlap, bound] = this.__intersection(thisSides[i], [dx, dy], oSides[i], [dx2, dy2]);
 
                 if(bestTime > time) {
@@ -605,7 +607,7 @@ class GameCollisionObject extends GameObject {
         let [_x, _y, width, height] = this.getHitBox();
         let [[x, y], ax, len] = bound;
 
-        if(this.___covered[ax]) return;
+        //if(this.___covered[boundIdx]) return;
         if(!this._movable) return;
         this.___covered[ax] = true;
 
@@ -635,7 +637,7 @@ class GameCollisionObject extends GameObject {
         for(let elem in GameCollisionObject.collisions) {
             colList.push(GameCollisionObject.collisions[elem]);
         }
-        colList.sort((a, b) => a[0]._movable - b[0], a[3] - b[3]);
+        colList.sort((a, b) => a[3] - b[3]);
         
         let sideSwap = GameCollisionObject.sideSwaps;
         let sideNames = GameCollisionObject.sideNames;
@@ -1367,10 +1369,6 @@ elem_proto.makeGame = async function(levelPath, blockTypes = [], entityTypes = [
                 
                 let [x1, y1, w1, h1] = entity1.getHitBox();
                 
-                let blk = gameState.level.blockSize;
-                let [dx, dy, dw, dh] = gameState.camera.transformBox([x1 * blk, y1 * blk, w1 * blk, h1 * blk])
-                gameState.painter.strokeRect(dx, dy, dw, dh);
-                
                 // Handle any entity-block collisions....
                 let xbs = boundNFloor(x1, 0, (chunkSize * numChunks[0]) - 1);
                 let ybs = boundNFloor(y1, 0, (chunkSize * numChunks[1]) - 1);
@@ -1490,7 +1488,8 @@ elem_proto.makeGame = async function(levelPath, blockTypes = [], entityTypes = [
             
             gameState.addBlock = function(block) {
                 let [bx, by] = _reboundEntity(block, this.level.chunkSize, this.level.numChunks);
-                let [cx, cy] = [Math.floor(ex / this.level.chunkSize), Math.floor(ey / this.level.chunkSize)];
+                let [cx, cy] = [Math.floor(bx / this.level.chunkSize), Math.floor(by / this.level.chunkSize)];
+                [bx, by] = [Math.floor(bx), Math.floor(by)];
                 
                 block.x = Math.floor(bx);
                 block.y = Math.floor(by);
@@ -1504,6 +1503,26 @@ elem_proto.makeGame = async function(levelPath, blockTypes = [], entityTypes = [
                 
                 this.level.chunks[cx][cy].blocks[subBX][subBY] = block.toJSON();
             };
+            
+            gameState.getPlayer = function() {
+                return gameState.__player;
+            };
+            
+            gameState.getNeighboringBlocks = function(block, distance) {
+                let [bx, by] = _reboundEntity(block, this.level.chunkSize, this.level.numChunks);
+                let [cx, cy] = [Math.floor(bx / this.level.chunkSize), Math.floor(by / this.level.chunkSize)];
+                
+                let neighbors = [
+                    [null, null, null],
+                    [null, null, null],
+                    [null, null, null]
+                ];
+                
+                let subBX = bx % this.level.chunkSize;
+                let subBY = by % this.level.chunkSize;
+                
+                // TODO: Finish!
+            }
         }
         
         update(timeStep, gameState);
