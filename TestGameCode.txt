@@ -28,8 +28,10 @@ class Player extends GameCollisionObject {
         this._sprite = sprites.playerSprite.buildSprite();
         this._sprite.setAnimation("stand");
         this._inset = [8 / 32, 2 / 32, 16 / 32, 27 / 32];
-        this._vx = 0; 
+        this._vx = 0;
         this._vy = 0;
+        this._pvx = 0;
+        this._pvy = 0;
         this._ax = 0;
         this._ay = 0.09 / 1000;
         this._priorUp = false;
@@ -78,6 +80,9 @@ class Player extends GameCollisionObject {
         this._vy += this._ay * timeStep;
         this._vy *= this._fric_fac;
         
+        this._pvx = this._vx;
+        this._pvy = this._vy;
+        
         this.x += this._vx * timeStep;
         this.y += this._vy * timeStep;
         
@@ -107,6 +112,7 @@ class Player extends GameCollisionObject {
         if(side == "bottom") {
             this._numJumps = 2;
             if(this._sprite.getAnimation() == "jump") this._sprite.setAnimation("stand");
+            if(obj instanceof Enemy) this._vy = -this._pvy;
         }
         else if(obj instanceof Enemy && this._waitTime <= 0) {
             this._hp -= 2;

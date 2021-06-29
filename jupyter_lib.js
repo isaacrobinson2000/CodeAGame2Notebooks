@@ -312,7 +312,12 @@ elem_proto.makeBaseGame = async function(gameLoop, gameState = {}, levelData = {
     for(let spriteName in (levelData.sprites ?? {})) {
         gameState.sprites[spriteName] = await getSpriteBuilder(levelData.sprites[spriteName]);
     }
-    gameState.level = (levelData.level != null)? await loadJSON(levelData.level): {};
+    
+    try {
+        gameState.level = (levelData.level != null)? await loadJSON(levelData.level): {};
+    } catch(exp) {
+        gameState.level = {};
+    }
     
     function loopManager(timeStamp) {
         let {width, height} = gameState.canvas.getBoundingClientRect();
@@ -1640,8 +1645,8 @@ elem_proto.makeGame = async function(levelPath, blockTypes = [], entityTypes = [
     
     function draw(canvas, painter, gameState) {
         // Clear the canvas...
-        //painter.fillStyle = "white"
-        //painter.fillRect(0, 0, canvas.width, canvas.height);
+        painter.fillStyle = "white"
+        painter.fillRect(0, 0, canvas.width, canvas.height);
         
         if("preDraw" in callbacks) {
             if(callbacks.preDraw(canvas, painter, gameState)) return;
