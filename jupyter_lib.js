@@ -1508,9 +1508,8 @@ elem_proto.makeGame = async function(levelPath, blockTypes = [], entityTypes = [
                 return gameState.__player;
             };
             
-            gameState.getNeighboringBlocks = function(block, distance) {
-                let [bx, by] = _reboundEntity(block, this.level.chunkSize, this.level.numChunks);
-                let [cx, cy] = [Math.floor(bx / this.level.chunkSize), Math.floor(by / this.level.chunkSize)];
+            gameState.getNeighboringBlocks = function(block) {
+                let [bx, by] = _reboundEntity(block, this.level.chunkSize, this.level.numChunks).map(Math.floor);
                 
                 let neighbors = [
                     [null, null, null],
@@ -1518,11 +1517,34 @@ elem_proto.makeGame = async function(levelPath, blockTypes = [], entityTypes = [
                     [null, null, null]
                 ];
                 
-                let subBX = bx % this.level.chunkSize;
-                let subBY = by % this.level.chunkSize;
+                let iStart = bx - 1;
+                let jStart = by - 1;
                 
-                // TODO: Finish!
-            }
+                for(let i = iStart; i < bx + 2; i++) {
+                    for(let j = jStart; j < by + 2; j++) {
+                        let [cx, cy] = [i / this.level.chunkSize, j / this.level.chunkSize].map(Math.floor); 
+                        
+                        let subBX = i % this.level.chunkSize;
+                        let subBY = j % this.level.chunkSize;
+                        
+                        if([cx, cy] in this.chunkLookup) {
+                            neighbors[i - iStart][j - jStart] = this.chunkLookup[[cx, cy]].blocks[subBX][subBY];
+                        }
+                    }
+                }
+                
+                return neighbors;
+            };
+            
+            gameState.getEntities = function() {
+                let entityLst = [];
+                
+                for(let [cx, cy, chunk] of this.loadedChunks) {
+                    entityLst.push(...chunk.entities);
+                }
+                
+                return entityLst;
+            };
         }
         
         update(timeStep, gameState);

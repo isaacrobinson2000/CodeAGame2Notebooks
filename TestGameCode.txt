@@ -10,7 +10,7 @@ class GameBlock extends GameCollisionObject {
         // Implement this:
         let [cx, cy, cw, ch] = camera.transformBox([this.x * this._blockSize , this.y * this._blockSize, this._blockSize, this._blockSize]);
                 
-        painter.fillStyle = "rgba(255, 0, 0, 0.5)";
+        painter.fillStyle = "red";
         painter.fillRect(cx, cy, cw, ch);
     }
     
@@ -124,6 +124,7 @@ class Player extends GameCollisionObject {
 class Enemy extends GameCollisionObject {
     constructor(x, y, blockSize, sprites) {
         super(x, y, blockSize, sprites);
+        this.__ss = sprites;
         this._sprite = sprites.enemySprite.buildSprite();
         this._sprite.setAnimation("run");
         this._vx = 0;
@@ -132,13 +133,16 @@ class Enemy extends GameCollisionObject {
         this._ay = 0.09 / 1000;
         this._fric_fac = 0.95;
         this._inset = [8 / 32, 2 / 32, 16 / 32, 27 / 32];
+        this._blocksBelow = [false, false];
         
         this._hp = 5;
         
         this._movable = true;
+        this._gState = null;
     }
     
     update(timeStep, gameState) {
+        this._gState = gameState;
         if(this._hp <= 0) return true;
         
         this._sprite.update(timeStep);
@@ -148,6 +152,9 @@ class Enemy extends GameCollisionObject {
         
         this._vx += this._ax * timeStep;
         this._vx *= this._fric_fac;
+        
+        if(!this._blocksBelow[(this._vx < 0)? 0: 1]) this._vx = 0;
+        
         this._vy += this._ay * timeStep;
         this._vy *= this._fric_fac;
         
@@ -173,6 +180,13 @@ class Enemy extends GameCollisionObject {
         else if(obj instanceof Player && side != "bottom") {
             let d = (side == "left")? 1: -1;
             this._vx += d * 0.01; 
+        }
+        else if(obj instanceof GameBlock && side == "bottom") {
+            let [x, y] = obj.getLocation()
+            let blks = this._gState.getNeighboringBlocks(obj);
+            this._blocksBelow = [
+                blks[0][1] != null, blks[2][1] != null
+            ];
         }
     }
     
