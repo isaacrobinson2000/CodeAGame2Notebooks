@@ -511,6 +511,7 @@ class GameCollisionObject extends GameObject {
         
         this._collisionSides = {"left": true, "top": true, "right": true, "bottom": true};
         this._movable = false;
+        this._solid = true;
         this.___covered = [false, false];
     }
     
@@ -659,8 +660,10 @@ class GameCollisionObject extends GameObject {
             let [[x, y], ax, len] = bound;
             
             // Move both objects....
-            obj.__collisionAdjust(bound, boundIdx);
-            otherObj.__collisionAdjust(bound, sideSwap[boundIdx]);
+            if(obj._solid && otherObj._solid) {
+                obj.__collisionAdjust(bound, boundIdx);
+                otherObj.__collisionAdjust(bound, sideSwap[boundIdx]);
+            }
             // For extra functionality...
             obj.handleCollisions(otherObj, sideNames[sideSwap[boundIdx]]);
             otherObj.handleCollisions(obj, sideNames[boundIdx]);
