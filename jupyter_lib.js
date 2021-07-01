@@ -992,9 +992,7 @@ elem_proto.levelEditor = async function(levelPath, blockTypes = [], entityTypes 
             return null;
         }
         
-        update(timeStep, gameState) {
-            if("preUpdate" in callbacks) callbacks.preUpdate(timeStep, gameState);
-            
+        update(timeStep, gameState) {            
             if(this._blocks == null) {
                 this._blocks = _gameObjMappingToList(gameState.blockTypes);
                 this._entities = _gameObjMappingToList(gameState.entityTypes);
@@ -1023,8 +1021,6 @@ elem_proto.levelEditor = async function(levelPath, blockTypes = [], entityTypes 
             }
 
             this._deleteSprite.update(timeStep);
-            
-            if("postUpdate" in callbacks) callbacks.postUpdate(timeStep, gameState);
         }
         
         getOverBar() {
