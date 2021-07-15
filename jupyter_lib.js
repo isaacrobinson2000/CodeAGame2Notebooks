@@ -515,7 +515,7 @@ class GameCollisionObject extends GameObject {
         this.___covered = [false, false];
     }
     
-    __intersection(boxSeg, dvec, boxSeg2, dvec2) {
+    __intersection(boxSeg, dvec, boxSeg2, dvec2, ignoreT = false) {
         // PRIVATE: Tests 2 borders for colision within the time step.
         let [pt, ax, len] = boxSeg;
         let [pt2, ax2, len2] = boxSeg2;
@@ -534,7 +534,7 @@ class GameCollisionObject extends GameObject {
         
         if((res + len < res2) || (res2 + len2 < res)) return [Infinity, 0, null];
         
-        if(t > 1 || t < -5) return [Infinity, 0, null];
+        if(!ignoreT && (t > 1 || t < -5)) return [Infinity, 0, null];
         
         let segOverlap = Math.min.apply(
             null, [res2 - (res + len), (res2 + len2) - res].map(Math.abs)
