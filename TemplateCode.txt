@@ -1,0 +1,106 @@
+%%javascript
+
+class Player extends GameObject {
+    constructor(x, y, blockSize, sprites) {
+        super(x, y, blockSize, sprites);
+        // More initialization here...
+        // NOTE: not for this lesson :) 
+        this._inset = [0, 0, 1, 1];
+        this._spriteSize = [1, 1];
+    }
+    
+    update(timeStep, gameState) {
+        // Update code here. Returning true resets the entire level.
+        // NOTE: not for this lesson :) 
+    }
+    
+    draw(canvas, painter, camera) {
+        // Draw code here...
+        let [xi, yi, wi, hi] = this._inset;
+        let [inx, iny] = [
+            (this.x * this._blockSize) - (xi * this._blockSize), 
+            (this.y * this._blockSize) - (yi * this._blockSize)
+        ];
+        let [cx, cy, cw, ch] = camera.transformBox([inx, iny, wi * this._blockSize, hi * this._blockSize]);
+        
+        painter.fillStyle = "blue";
+        painter.fillRect(cx, cy, cw, ch);
+    }
+    
+    drawPreview(canvas, painter, box) {
+        // Draw preview code here...
+        let [cx, cy, cw, ch] = box;
+        painter.fillStyle = "blue";
+        painter.fillRect(cx, cy, cw, ch);
+    }
+}
+
+class Entity extends GameObject {
+    constructor(x, y, blockSize, sprites) {
+        super(x, y, blockSize, sprites);
+        // More initialization here...
+        // NOTE: not for this lesson :) 
+        this._inset = [0, 0, 1, 1];
+        this._spriteSize = [1, 1];
+    }
+    
+    update(timeStep, gameState) {
+        // Update code here. Returning true destroys the enemy.
+        // NOTE: not for this lesson :) 
+    }
+    
+    draw(canvas, painter, camera) {
+        // Draw code here...
+        let [xi, yi, wi, hi] = this._inset;
+        let [inx, iny] = [
+            (this.x * this._blockSize) - (xi * this._blockSize), 
+            (this.y * this._blockSize) - (yi * this._blockSize)
+        ];
+        let [cx, cy, cw, ch] = camera.transformBox([inx, iny, wi * this._blockSize, hi * this._blockSize]);
+        
+        painter.fillStyle = "red";
+        painter.fillRect(cx, cy, cw, ch);
+    }
+    
+    drawPreview(canvas, painter, box) {
+        // Draw preview code here...
+        let [cx, cy, cw, ch] = box;
+        painter.fillStyle = "red";
+        painter.fillRect(cx, cy, cw, ch);
+    }
+}
+
+class Block extends GameObject {
+    constructor(x, y, blockSize, sprites) {
+        super(x, y, blockSize, sprites);
+        // More initialization here...
+        // NOTE: not for this lesson :) 
+    }
+    
+    update(timeStep, gameState) {
+        // Update code here. Returning true destroys the block.
+        // NOTE: not for this lesson :) 
+    }
+    
+    draw(canvas, painter, camera) {
+        // Draw code here...
+        let [cx, cy, cw, ch] = camera.transformBox([this.x * this._blockSize , this.y * this._blockSize, this._blockSize, this._blockSize]);
+                
+        painter.fillStyle = "gray";
+        painter.fillRect(cx, cy, cw, ch);
+    }
+    
+    drawPreview(canvas, painter, box) {
+        // Draw preview code here...
+        let [cx, cy, cw, ch] = box;
+        
+        painter.fillStyle = "gray";
+        painter.fillRect(cx, cy, cw, ch);
+    }
+}
+
+// We'll learn about this later....
+let spriteData = {};
+
+// First, we have to make a level.
+element.levelEditor("levels/test_level.json", [Block], [Entity], spriteData, Player); 
