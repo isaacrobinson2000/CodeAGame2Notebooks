@@ -1,4 +1,5 @@
 %%javascript
+// Game code goes here....
 
 class GameBlock extends GameCollisionObject {
     update(timeStep, gameState) {
@@ -36,7 +37,8 @@ class Player extends GameCollisionObject {
         this._ay = 0.09 / 1000;
         this._priorUp = false;
         this._numJumps = Infinity;
-        this._fric_fac = 0.95;
+        this._fric_facx = 0.96;
+        this._fric_facy = 0.9999;
         this._waitTime = 0;
         
         this._hp = 5;
@@ -67,7 +69,7 @@ class Player extends GameCollisionObject {
             anim = "run";
         }
         if(!this._priorUp && ("ArrowUp" in keys) && (this._numJumps > 0)) {
-            this._vy = -5 / 1000 * timeStep;
+            this._vy = -25 / 1000;
             this._numJumps--;
             anim = "jump";
         }
@@ -76,9 +78,9 @@ class Player extends GameCollisionObject {
         if(this._sprite.getAnimation() != "jump") this._sprite.setAnimation(anim);
                 
         this._vx += this._ax * timeStep;
-        this._vx *= this._fric_fac;
+        this._vx *= this._fric_facx;
         this._vy += this._ay * timeStep;
-        this._vy *= this._fric_fac;
+        this._vy *= this._fric_facy;
         
         this._pvx = this._vx;
         this._pvy = this._vy;
