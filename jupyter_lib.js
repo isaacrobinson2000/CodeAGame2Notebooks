@@ -511,7 +511,6 @@ class GameCollisionObject extends GameObject {
         
         this._collisionSides = {"left": true, "top": true, "right": true, "bottom": true};
         this._movable = false;
-        this._solid = true;
         this.___covered = [false, false];
     }
     
@@ -526,15 +525,19 @@ class GameCollisionObject extends GameObject {
         let t = (pt2[opAx] - pt[opAx]) / (dvec[opAx] - dvec2[opAx]);
         
         if((t == Infinity) || (t == -Infinity)) return [Infinity, 0, null];
-        if(t != t) return [Infinity, 0, null];
+        
+        // We got 0 / 0 or NaN, that means indeterminate. (Were not sure either way...)
+        // I just go with 1, meaning all other in-frame collisions are resolved first, then this collision is checked...
+        if(t != t) t = 1;
         
         let res = pt[ax] + dvec[ax] * t;
         let res2 = pt2[ax] + dvec2[ax] * t;
         let overlapLoc = pt[opAx] + dvec[opAx] * t;
         
+        // Check if borders overlap...
         if((res + len < res2) || (res2 + len2 < res)) return [Infinity, 0, null];
         
-        if(!ignoreT && (t > 1 || t < -5)) return [Infinity, 0, null];
+        if((!ignoreT) && (t > 1 || t < -5)) return [Infinity, 0, null];
         
         let segOverlap = Math.min.apply(
             null, [res2 - (res + len), (res2 + len2) - res].map(Math.abs)
@@ -566,11 +569,25 @@ class GameCollisionObject extends GameObject {
         return sides;
     }
     
+    __getFullCollisionBox() {
+        let [x, y, w, h] = this.getHitBox();
+        return [
+            Math.min(x, this.___px), 
+            Math.min(y, this.___py),
+            w + Math.abs(x - this.___px),
+            h + Math.abs(y - this.___py)
+        ]
+    }
+    
     __getDisplacementVector() {
         return [this.x - this.___px, this.y - this.___py];
     }
     
     handleCollisions(obj, side) {}
+    
+    isSolid(obj, side) {
+        return true;
+    }
     
     onCollision(other) {
         if(this._movable && (this._vx == null || this._vy == null)) {
@@ -593,7 +610,7 @@ class GameCollisionObject extends GameObject {
 
             for(let i = 0; i < thisSides.length; i++) {
                 if((oSides[i] == null) || (thisSides[i] == null)) continue;
-                let [time, overlap, bound] = this.__intersection(thisSides[i], [dx, dy], oSides[i], [dx2, dy2]);
+                let [time, overlap, bound] = this.__intersection(thisSides[i], [dx, dy], oSides[i], [dx2, dy2], true);
 
                 if(bestTime > time) {
                     bestTime = time;
@@ -618,14 +635,15 @@ class GameCollisionObject extends GameObject {
         this.___covered[ax] = true;
 
         let sign = GameCollisionObject.sideSigns[boundIdx];
+        let [sdx, sdy] = this.__getDisplacementVector().map((e) => Math.sign(e));
 
         let cX = x - ((sign + 1) * width / 2);
         let cY = y - ((sign + 1) * height / 2);
-        this.x = (ax == 0)? this.x: cX;
-        this.y = (ax == 1)? this.y: cY;
+        this.x = (ax == 0 || sdx != sign)? this.x: cX;
+        this.y = (ax == 1 || sdy != sign)? this.y: cY;
         
-        this._vx *= !this.___covered[1];
-        this._vy *= !this.___covered[0];
+        this._vx *= (ax == 1 && Math.sign(this._vx) == sign)? !this.___covered[1]: 1;
+        this._vy *= (ax == 0 && Math.sign(this._vy) == sign)? !this.___covered[0]: 1;
     }
     
     onCollisionEnd() {
@@ -658,9 +676,10 @@ class GameCollisionObject extends GameObject {
             
             if(overlap <= 0 || bound == null) continue;
             let [[x, y], ax, len] = bound;
+            let snames = GameCollisionObject.sideNames;
             
             // Move both objects....
-            if(obj._solid && otherObj._solid) {
+            if(obj.isSolid(otherObj, sideNames[sideSwap[boundIdx]]) && otherObj.isSolid(obj, sideNames[boundIdx])) {
                 obj.__collisionAdjust(bound, boundIdx);
                 otherObj.__collisionAdjust(bound, sideSwap[boundIdx]);
             }
@@ -1347,9 +1366,11 @@ elem_proto.makeGame = async function(levelPath, blockTypes = [], entityTypes = [
     
     function _resetLevel(gameState) {
         gameState.level = JSON.parse(JSON.stringify(gameState.__origLevel));
-        for(let prop in gameState.level.player) {
-            gameState.__player[prop] = gameState.level.player[prop];
-        }
+        
+        let lvl = gameState.level;
+        gameState.__player = gameState.playerType.fromJSON(lvl.player, lvl.blockSize, gameState.sprites);
+        gameState.camera.setTrackedObject(gameState.__player);
+        
         gameState.loadedChunks = [];
         gameState.chunkLookup = {};
     }
@@ -1371,7 +1392,9 @@ elem_proto.makeGame = async function(levelPath, blockTypes = [], entityTypes = [
                 // -1 indicates index of the player...
                 let entity1 = (i < 0)? player: chunk.entities[i];
                 
-                let [x1, y1, w1, h1] = entity1.getHitBox();
+                if(!("__getFullCollisionBox" in entity1)) continue;
+                
+                let [x1, y1, w1, h1] = entity1.__getFullCollisionBox();
                 
                 // Handle any entity-block collisions....
                 let xbs = boundNFloor(x1, 0, (chunkSize * numChunks[0]) - 1);
@@ -1390,9 +1413,9 @@ elem_proto.makeGame = async function(levelPath, blockTypes = [], entityTypes = [
                         
                         let block = chunkLookup[[cxb, cyb]].blocks[bx][by]
                         
-                        if(block != null) {
+                        if((block != null) && ("__getFullCollisionBox" in block)) {
                             // If block is not null, perform collision check with entity...
-                            let [x2, y2, w2, h2] = block.getHitBox();
+                            let [x2, y2, w2, h2] = block.__getFullCollisionBox();
                             
                             if(
                                 !((x2 >= (x1 + w1)) || ((x2 + w2) <= x1)) // If we collide on x-values
@@ -1425,7 +1448,9 @@ elem_proto.makeGame = async function(levelPath, blockTypes = [], entityTypes = [
                     
                     for(let j = ((ci == cj)? i + 1: 0); j < chunk2.entities.length; j++) {
                         let entity2 = chunk2.entities[j];
-                        let [x2, y2, w2, h2] = entity2.getHitBox();
+                        
+                        if(!("__getFullCollisionBox" in entity2)) continue;
+                        let [x2, y2, w2, h2] = entity2.__getFullCollisionBox();
                         
                         // Collision checks....
                         if(
