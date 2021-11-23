@@ -2,6 +2,12 @@
 // Game code goes here....
 
 class GameBlock extends GameCollisionObject {
+    constructor(x, y, blockSize, sprites) {
+        super(x, y, blockSize, sprites);
+        this._sprite = sprites.sandSprite.buildSprite();
+        this._sprite.setAnimation("middle");
+    }
+    
     update(timeStep, gameState) {
         // Do we do anything in update?
         // No, because blocks don't move.
@@ -10,25 +16,46 @@ class GameBlock extends GameCollisionObject {
     draw(canvas, painter, camera) {
         // Implement this:
         let [cx, cy, cw, ch] = camera.transformBox([this.x * this._blockSize , this.y * this._blockSize, this._blockSize, this._blockSize]);
-                
-        painter.fillStyle = "red";
-        painter.fillRect(cx, cy, cw, ch);
+        this._sprite.draw(painter, cx, cy, cw, ch);
     }
     
     drawPreview(canvas, painter, box) {
         let [cx, cy, cw, ch] = box;
-        
-        painter.fillStyle = "red";
-        painter.fillRect(cx, cy, cw, ch);
+        this._sprite.draw(painter, cx, cy, cw, ch);
+    }
+}
+
+class GameBlock2 extends GameCollisionObject {
+    constructor(x, y, blockSize, sprites) {
+        super(x, y, blockSize, sprites);
+        this._sprite = sprites.sandSprite.buildSprite();
+        this._sprite.setAnimation("top");
+    }
+    
+    update(timeStep, gameState) {
+        // Do we do anything in update?
+        // No, because blocks don't move.
+    }
+    
+    draw(canvas, painter, camera) {
+        // Implement this:
+        let [cx, cy, cw, ch] = camera.transformBox([this.x * this._blockSize , this.y * this._blockSize, this._blockSize, this._blockSize]);
+        this._sprite.draw(painter, cx, cy, cw, ch);
+    }
+    
+    drawPreview(canvas, painter, box) {
+        let [cx, cy, cw, ch] = box;
+        this._sprite.draw(painter, cx, cy, cw, ch);
     }
 }
 
 class Player extends GameCollisionObject {
     constructor(x, y, blockSize, sprites) {
         super(x, y, blockSize, sprites);
+        console.log(sprites);
         this._sprite = sprites.playerSprite.buildSprite();
         this._sprite.setAnimation("stand");
-        this._inset = [8 / 32, 2 / 32, 16 / 32, 27 / 32];
+        this._inset = [4 / 32, 4 / 32, 28 / 32, 26 / 32];
         this._vx = 0;
         this._vy = 0;
         this._pvx = 0;
@@ -100,7 +127,7 @@ class Player extends GameCollisionObject {
             (this.x * this._blockSize) - (xi * this._blockSize), 
             (this.y * this._blockSize) - (yi * this._blockSize)
         ];
-        let [cx, cy, cw, ch] = camera.transformBox([inx, iny, this._blockSize, this._blockSize]);
+        let [cx, cy, cw, ch] = camera.transformBox([inx, iny, 42, 32]);
         
         if((Math.floor(this._waitTime / 50) % 2) == 0) this._sprite.draw(painter, cx, cy, cw, ch);
     }
@@ -140,7 +167,7 @@ class Enemy extends GameCollisionObject {
         this._ax = 0;
         this._ay = 0.09 / 1000;
         this._fric_fac = 0.95;
-        this._inset = [8 / 32, 2 / 32, 16 / 32, 27 / 32];
+        this._inset = [10 / 32, 0 / 32, 73 / 32, 16 / 32];
         this._blocksBelow = [false, false];
         
         this._hp = 5;
@@ -177,7 +204,7 @@ class Enemy extends GameCollisionObject {
             (this.x * this._blockSize) - (xi * this._blockSize), 
             (this.y * this._blockSize) - (yi * this._blockSize)
         ];
-        let [cx, cy, cw, ch] = camera.transformBox([inx, iny, this._blockSize, this._blockSize]);
+        let [cx, cy, cw, ch] = camera.transformBox([inx, iny, 96, 24]);
         this._sprite.draw(painter, cx, cy, cw, ch);
     }
     
@@ -225,21 +252,20 @@ function gameLoop(timeStep, gameState) {
 }
 
 let gameState = {
-    "block": new GameBlock(0, 0, 32),
     "cameraMoveSpeed": 5
 }
 
 let levelData = {
     sprites: {
         playerSprite: {
-            image: "images/player.png",
+            image: "images/seagull2.png",
+            width: 42,
             animations: {
                 "stand": {
                     "frames": [0],
                 },
                 "run": {
-                    "frames": [0, 1, 2, 3],
-                    "speed": 100
+                    "speed": 10
                 },
                 "jump": {
                     "frames": [0, 4, 5],
@@ -249,19 +275,27 @@ let levelData = {
             }
         },
         enemySprite: {
-            image: "images/enemy.png",
+            image: "images/croc.png",
+            width: 96,
             animations: {
                 "stand": {
-                    "frames": [0],
+                    "frames": [4, 5],
+                    "speed": 100
                 },
                 "run": {
                     "frames": [0, 1, 2, 3],
                     "speed": 100
+                }
+            }
+        },
+        sandSprite: {
+            image: "images/sand.png",
+            animations: {
+                "top": {
+                    "frames": [0]
                 },
-                "jump": {
-                    "frames": [0, 4, 5, 5, 4],
-                    "speed": 150,
-                    "cycles": 1
+                "middle": {
+                    "frames": [1]
                 }
             }
         }
