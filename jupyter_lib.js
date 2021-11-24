@@ -1588,6 +1588,11 @@ elem_proto.makeGame = async function(levelPath, blockTypes = [], entityTypes = [
                 return neighbors;
             };
             
+            gameState.getBlocksAround = function(x, y) {
+                let dummyObj = new GameObject(x, y, gameState.level.blockSize, null);
+                return gameState.getNeighboringBlocks(dummyObj);
+            }
+            
             gameState.getEntities = function() {
                 let entityLst = [];
                 

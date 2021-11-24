@@ -145,7 +145,7 @@ class Player extends GameCollisionObject {
             this._sprite.setHorizontalFlip(false);
         }
         if(!this._priorUp && ("ArrowUp" in keys) && (this._numJumps > 0)) {
-            this._vy = -20 / 1000;
+            this._vy = -25 / 1000;
             this._numJumps--;
             anim = "jump";
         }
@@ -210,7 +210,7 @@ class Enemy extends GameCollisionObject {
         super(x, y, blockSize, sprites);
         this.__ss = sprites;
         this._sprite = sprites.enemySprite.buildSprite();
-        this._sprite.setAnimation("run");
+        this._sprite.setAnimation("stand");
         this._vx = 0;
         this._vy = 0;
         this._ax = 0;
@@ -226,26 +226,38 @@ class Enemy extends GameCollisionObject {
     }
     
     update(timeStep, gameState) {
-        this._gState = gameState;
         if(this._hp <= 0) return true;
         
         let [px, py] = gameState.getPlayer().getLocation();
         
-        this._ax = 0.03 / 1000 * Math.sign(px - this.x);
+        let dist = Math.sqrt((px - this.x) * (px - this.x) + (py - this.y) * (py - this.y));
+        
+        this._ax = (dist < 6)? 0.03 / 1000 * Math.sign(px - this.x): 0;
+        
+        if(this._ax != 0) {
+            this._sprite.setHorizontalFlip(this._ax > 0);
+            this._sprite.setAnimation("run");
+        }
+        else this._sprite.setAnimation("stand");
+        
+        this.updateBlockInfo(timeStep, gameState);
+        if(!this._blocksBelow[(this._ax < 0)? 0: 1]) this._ax *= -1;
         
         this._vx += this._ax * timeStep;
         this._vx *= this._fric_fac;
-        
-        if(!this._blocksBelow[(this._vx < 0)? 0: 1]) this._vx = 0;
-        
+                
         this._vy += this._ay * timeStep;
         this._vy *= this._fric_fac;
         
         this.x += this._vx * timeStep;
         this.y += this._vy * timeStep;
         
-        this._sprite.setHorizontalFlip(this._ax > 0);
         this._sprite.update(timeStep);
+    }
+    
+    updateBlockInfo(timeStep, gameState) {
+        this._blocksBelow[0] = gameState.getBlocksAround(this.x, this.y + this._inset[3] / 2)[1][2] != null;
+        this._blocksBelow[1] = gameState.getBlocksAround(this.x + this._inset[2], this.y + this._inset[3] / 2)[1][2] != null;
     }
     
     draw(canvas, painter, camera) {
@@ -266,13 +278,6 @@ class Enemy extends GameCollisionObject {
         else if(obj instanceof Player && side != "bottom") {
             let d = (side == "left")? 1: -1;
             this._vx += d * 0.01; 
-        }
-        else if(obj instanceof GameBlock || obj instanceof GameBlock2 && side == "bottom") {
-            let [x, y] = obj.getLocation()
-            let blks = this._gState.getNeighboringBlocks(obj);
-            this._blocksBelow = [
-                blks[0][1] != null, blks[2][1] != null
-            ];
         }
     }
     
@@ -303,7 +308,7 @@ function gameLoop(timeStep, gameState) {
 }
 
 let gameState = {
-    "cameraMoveSpeed": 5
+    "cameraMoveSpeed": 20
 }
 
 let levelData = {
@@ -331,7 +336,7 @@ let levelData = {
             animations: {
                 "stand": {
                     "frames": [4, 5],
-                    "speed": 100
+                    "speed": 400
                 },
                 "run": {
                     "frames": [0, 1, 2, 3],

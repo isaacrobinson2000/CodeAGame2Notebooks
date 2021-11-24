@@ -3829,7 +3829,11 @@
                         null,
                         null,
                         null,
-                        null,
+                        {
+                            "_$type": "Grass",
+                            "x": 19,
+                            "y": 28
+                        },
                         {
                             "_$type": "GameBlock2",
                             "x": 19,
@@ -7333,7 +7337,11 @@
                         null,
                         null,
                         null,
-                        null,
+                        {
+                            "_$type": "Grass",
+                            "x": 40,
+                            "y": 24
+                        },
                         {
                             "_$type": "GameBlock2",
                             "x": 40,
