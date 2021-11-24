@@ -102,7 +102,10 @@ class Sprite {
         this._cycles = Infinity;
         
         this._index = 0;
-        this._accumulator = 0;        
+        this._accumulator = 0;
+        
+        this._horiz_flip = false;
+        this._vert_flip = false;
     }
     
     setAnimation(animationName) {
@@ -128,6 +131,22 @@ class Sprite {
     
     getAnimation() {
         return this._selected;
+    }
+    
+    isVerticallyFlipped() {
+        return this._vert_flip;
+    }
+    
+    isHorizontallyFlipped() {
+        return this._horiz_flip;
+    }
+    
+    setVerticalFlip(value) {
+        this._virt_flip = !!(value);
+    }
+    
+    setHorizontalFlip(value) {
+        this._horiz_flip = !!(value);
     }
     
     get width() {
@@ -159,7 +178,11 @@ class Sprite {
         let imgIdx = this._frames[this._index];
         let xin = this._width * imgIdx;
         
-        ctx.drawImage(this._img, xin, 0, this._width, this._height, x, y, width, height);
+        ctx.save();
+        ctx.translate((this._horiz_flip)? x + width: x, (this._vert_flip)? y + height: y);
+        ctx.scale(this._horiz_flip? -1: 1, this._vert_flip? -1: 1);
+        ctx.drawImage(this._img, xin, 0, this._width, this._height, 0, 0, width, height);
+        ctx.restore();
     }
 }
 
@@ -1050,9 +1073,7 @@ elem_proto.levelEditor = async function(levelPath, blockTypes = [], entityTypes 
             return (this._selected != null)? [this._selected[0], (this._selected[1] >= 0)? this._lookupObj[this._selected[0]][this._selected[1]]: this._selected[1]]: null;
         }
         
-        draw(canvas, painter, camera) {
-            if("preDraw" in callbacks) callbacks.preDraw(canvas, painter, camera);
-            
+        draw(canvas, painter, camera) {            
             painter.fillStyle = "#dbdbdb";
             let [x, y, width, height] = camera.transformBox([this._x, this._y, this._width, this._itemSize * 2]);
             let step = height / 2;
@@ -1084,8 +1105,6 @@ elem_proto.levelEditor = async function(levelPath, blockTypes = [], entityTypes 
                 let [idxOff, yOff] = (this._selected[0] == "block")? [1, step]: [2, 0];
                 painter.fillRect(x + (this._selected[1] + idxOff) * step, (this._selected[0] == "block")? y + yOff: y, step, step);
             }
-            
-            if("postDraw" in callbacks) callbacks.postDraw(canvas, painter, camera);
         }
     }
     
@@ -1234,6 +1253,8 @@ elem_proto.levelEditor = async function(levelPath, blockTypes = [], entityTypes 
         painter.fillStyle = "white"
         painter.fillRect(0, 0, canvas.width, canvas.height);
         
+        if("preDraw" in callbacks) callbacks.preDraw(canvas, painter, gameState);
+        
         for(let [x, y, chunk] of gameState.loadedChunks) {
             for(let bx = 0; bx < chunk.blocks.length; bx++) {
                 let blockCol = chunk.blocks[bx];
@@ -1280,6 +1301,8 @@ elem_proto.levelEditor = async function(levelPath, blockTypes = [], entityTypes 
         ) {
             gameState.__levelHoverIndicator.draw(canvas, painter, gameState.camera);
         }
+        
+        if("postDraw" in callbacks) callbacks.postDraw(canvas, painter, gameState);
         
         gameState.__levelSelectorBar.draw(canvas, painter, gameState.camera);
         gameState.__levelActionBar.draw(canvas, painter, gameState.camera);
