@@ -145,7 +145,7 @@ class Player extends GameCollisionObject {
             this._sprite.setHorizontalFlip(false);
         }
         if(!this._priorUp && ("ArrowUp" in keys) && (this._numJumps > 0)) {
-            this._vy = -25 / 1000;
+            this._vy = -20 / 1000;
             this._numJumps--;
             anim = "jump";
         }
@@ -336,7 +336,7 @@ let levelData = {
             animations: {
                 "stand": {
                     "frames": [4, 5],
-                    "speed": 400
+                    "speed": 500
                 },
                 "run": {
                     "frames": [0, 1, 2, 3],
