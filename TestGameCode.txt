@@ -1,9 +1,30 @@
 %%javascript
 // Game code goes here....
 
+class LogBlock extends GameCollisionObject {
+    constructor(x, y, sprites) {
+        super(x, y, sprites);
+        this._sprite = sprites.logSprite.buildSprite();
+        this._collisionSides = {"top": true};
+    }
+    
+    update(timeStep, gameState) {}
+    
+    draw(canvas, painter, camera) {
+        // Implement this:
+        let [cx, cy, cw, ch] = camera.transformBox([this.x, this.y, 1, 1]);
+        this._sprite.draw(painter, cx, cy, cw, ch);
+    }
+    
+    drawPreview(canvas, painter, box) {
+        let [cx, cy, cw, ch] = box;
+        this._sprite.draw(painter, cx, cy, cw, ch);
+    }
+}
+
 class GameBlock extends GameCollisionObject {
-    constructor(x, y, blockSize, sprites) {
-        super(x, y, blockSize, sprites);
+    constructor(x, y, sprites) {
+        super(x, y, sprites);
         this._sprite = sprites.sandSprite.buildSprite();
         this._sprite.setAnimation("middle");
     }
@@ -15,7 +36,7 @@ class GameBlock extends GameCollisionObject {
     
     draw(canvas, painter, camera) {
         // Implement this:
-        let [cx, cy, cw, ch] = camera.transformBox([this.x * this._blockSize , this.y * this._blockSize, this._blockSize, this._blockSize]);
+        let [cx, cy, cw, ch] = camera.transformBox([this.x, this.y, 1, 1]);
         this._sprite.draw(painter, cx, cy, cw, ch);
     }
     
@@ -26,8 +47,8 @@ class GameBlock extends GameCollisionObject {
 }
 
 class GameBlock2 extends GameCollisionObject {
-    constructor(x, y, blockSize, sprites) {
-        super(x, y, blockSize, sprites);
+    constructor(x, y, sprites) {
+        super(x, y, sprites);
         this._sprite = sprites.sandSprite.buildSprite();
         this._sprite.setAnimation("top");
     }
@@ -39,7 +60,7 @@ class GameBlock2 extends GameCollisionObject {
     
     draw(canvas, painter, camera) {
         // Implement this:
-        let [cx, cy, cw, ch] = camera.transformBox([this.x * this._blockSize, this.y * this._blockSize - 3, this._blockSize, this._blockSize + 3]);
+        let [cx, cy, cw, ch] = camera.transformBox([this.x, this.y - (3 / 32), 1, 35 / 32]);
         this._sprite.draw(painter, cx, cy, cw, ch);
     }
     
@@ -50,8 +71,8 @@ class GameBlock2 extends GameCollisionObject {
 }
 
 class Tree extends GameObject {
-    constructor(x, y, blockSize, sprites) {
-        super(x, y, blockSize, sprites);
+    constructor(x, y, sprites) {
+        super(x, y, sprites);
         this._sprite = sprites.treeSprite.buildSprite();
         this._numBlocks = 4;
         this._digIn = 4 / 32;
@@ -59,10 +80,9 @@ class Tree extends GameObject {
     
     draw(canvas, painter, camera) {
         // Implement this:
-        let bS = this._blockSize;
-        let scale = bS * this._numBlocks;
+        let scale = this._numBlocks;
         let [cx, cy, cw, ch] = camera.transformBox([
-            this.x * bS, this.y * bS, scale * (this._sprite.width / this._sprite.height), scale + this._digIn * bS
+            this.x, this.y, scale * (this._sprite.width / this._sprite.height), scale + this._digIn
         ]);
         this._sprite.draw(painter, cx, cy, cw, ch);
     }
@@ -74,8 +94,8 @@ class Tree extends GameObject {
 }
 
 class Grass extends GameObject {
-    constructor(x, y, blockSize, sprites) {
-        super(x, y, blockSize, sprites);
+    constructor(x, y, sprites) {
+        super(x, y, sprites);
         this._sprite = sprites.grassSprite.buildSprite();
     }
     
@@ -86,7 +106,7 @@ class Grass extends GameObject {
     
     draw(canvas, painter, camera) {
         // Implement this:
-        let [cx, cy, cw, ch] = camera.transformBox([this.x * this._blockSize , this.y * this._blockSize, this._blockSize, this._blockSize + 3]);
+        let [cx, cy, cw, ch] = camera.transformBox([this.x, this.y, 1, 35/32]);
         this._sprite.draw(painter, cx, cy, cw, ch);
     }
     
@@ -97,9 +117,8 @@ class Grass extends GameObject {
 }
 
 class Player extends GameCollisionObject {
-    constructor(x, y, blockSize, sprites) {
-        super(x, y, blockSize, sprites);
-        console.log(sprites);
+    constructor(x, y, sprites) {
+        super(x, y, sprites);
         this._sprite = sprites.playerSprite.buildSprite();
         this._sprite.setAnimation("stand");
         this._inset = [4 / 32, 4 / 32, 28 / 32, 24 / 32];
@@ -173,10 +192,10 @@ class Player extends GameCollisionObject {
         // Implement this:
         let [xi, yi, wi, hi] = this._inset;
         let [inx, iny] = [
-            (this.x * this._blockSize) - (xi * this._blockSize), 
-            (this.y * this._blockSize) - (yi * this._blockSize)
+            this.x - xi, 
+            this.y - yi
         ];
-        let [cx, cy, cw, ch] = camera.transformBox([inx, iny, 42, 32]);
+        let [cx, cy, cw, ch] = camera.transformBox([inx, iny, 42 / 32, 1]);
         
         if((Math.floor(this._waitTime / 50) % 2) == 0) this._sprite.draw(painter, cx, cy, cw, ch);
     }
@@ -186,9 +205,9 @@ class Player extends GameCollisionObject {
         this._sprite.draw(painter, cx, cy, cw, ch);
     }
     
-    handleCollisions(obj, side) {
+    handleCollision(obj, side) {
         if(side == "bottom") {
-            this._numJumps = 2;
+            this._numJumps = Infinity;
             if(this._sprite.getAnimation() == "jump") this._sprite.setAnimation("stand");
             if(obj instanceof Enemy) this._vy = -this._pvy;
         }
@@ -206,8 +225,8 @@ class Player extends GameCollisionObject {
 
 
 class Enemy extends GameCollisionObject {
-    constructor(x, y, blockSize, sprites) {
-        super(x, y, blockSize, sprites);
+    constructor(x, y, sprites) {
+        super(x, y, sprites);
         this.__ss = sprites;
         this._sprite = sprites.enemySprite.buildSprite();
         this._sprite.setAnimation("stand");
@@ -264,18 +283,18 @@ class Enemy extends GameCollisionObject {
         // Implement this:
         let [xi, yi, wi, hi] = this._inset;
         let [inx, iny] = [
-            (this.x * this._blockSize) - (xi * this._blockSize), 
-            (this.y * this._blockSize) - (yi * this._blockSize)
+            this.x - xi, 
+            this.y - yi
         ];
-        let [cx, cy, cw, ch] = camera.transformBox([inx, iny, 96, 24]);
+        let [cx, cy, cw, ch] = camera.transformBox([inx, iny, 96 / 32, 24 / 32]);
         this._sprite.draw(painter, cx, cy, cw, ch);
     }
     
-    handleCollisions(obj, side) {
-        if(obj instanceof Player && side == "top") {
+    handleCollision(obj, side) {
+        if((obj instanceof Player) && side == "top") {
             this._hp = 0;
         }
-        else if(obj instanceof Player && side != "bottom") {
+        else if((obj instanceof Player || obj instanceof Enemy) && side != "bottom") {
             let d = (side == "left")? 1: -1;
             this._vx += d * 0.01; 
         }
@@ -366,6 +385,9 @@ let levelData = {
         grassSprite: {
             image: "images/grass.png",
             width: 20
+        },
+        logSprite: {
+            image: "images/log.png"
         }
     }
 };
@@ -389,4 +411,4 @@ let callbacks = {
     }
 };
 
-element.makeGame("testdata/test_level.json", [GameBlock, GameBlock2, Tree, Grass], [Enemy], levelData, Player, callbacks=callbacks);
+element.makeGame("testdata/test_level.json", [GameBlock, GameBlock2, Tree, Grass, LogBlock], [Enemy], levelData, Player, callbacks=callbacks);

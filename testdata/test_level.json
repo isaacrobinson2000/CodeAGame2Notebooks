@@ -306,7 +306,13 @@
                 ]
             },
             {
-                "entities": [],
+                "entities": [
+                    {
+                        "_$type": "Enemy",
+                        "x": 15.85151892473094,
+                        "y": 27.88068301075267
+                    }
+                ],
                 "blocks": [
                     [
                         null,
@@ -423,7 +429,11 @@
                         null,
                         null,
                         null,
-                        null,
+                        {
+                            "_$type": "LogBlock",
+                            "x": 4,
+                            "y": 26
+                        },
                         null,
                         null,
                         null,
@@ -449,7 +459,11 @@
                         null,
                         null,
                         null,
-                        null,
+                        {
+                            "_$type": "LogBlock",
+                            "x": 5,
+                            "y": 26
+                        },
                         null,
                         null,
                         null,
@@ -475,7 +489,11 @@
                         null,
                         null,
                         null,
-                        null,
+                        {
+                            "_$type": "LogBlock",
+                            "x": 6,
+                            "y": 26
+                        },
                         null,
                         null,
                         null,
@@ -501,7 +519,11 @@
                         null,
                         null,
                         null,
-                        null,
+                        {
+                            "_$type": "LogBlock",
+                            "x": 7,
+                            "y": 26
+                        },
                         null,
                         null,
                         null,
@@ -3719,6 +3741,11 @@
                         "_$type": "Enemy",
                         "x": 29.449739842869803,
                         "y": 28.19985356625466
+                    },
+                    {
+                        "_$type": "Enemy",
+                        "x": 18.558454838710027,
+                        "y": 27.827392043011027
                     }
                 ],
                 "blocks": [
@@ -7066,7 +7093,11 @@
                         null,
                         null,
                         null,
-                        null,
+                        {
+                            "_$type": "LogBlock",
+                            "x": 32,
+                            "y": 25
+                        },
                         null,
                         null,
                         null,
@@ -7096,7 +7127,11 @@
                         null,
                         null,
                         null,
-                        null,
+                        {
+                            "_$type": "LogBlock",
+                            "x": 33,
+                            "y": 25
+                        },
                         null,
                         null,
                         null,
@@ -7122,7 +7157,11 @@
                         null,
                         null,
                         null,
-                        null,
+                        {
+                            "_$type": "LogBlock",
+                            "x": 34,
+                            "y": 25
+                        },
                         null,
                         null,
                         null,
@@ -7148,7 +7187,11 @@
                         null,
                         null,
                         null,
-                        null,
+                        {
+                            "_$type": "LogBlock",
+                            "x": 35,
+                            "y": 25
+                        },
                         null,
                         null,
                         null,
@@ -10676,25 +10719,11 @@
                         null,
                         null,
                         null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null
-                    ],
-                    [
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
+                        {
+                            "_$type": "LogBlock",
+                            "x": 52,
+                            "y": 25
+                        },
                         null,
                         null,
                         null,
@@ -10712,25 +10741,11 @@
                         null,
                         null,
                         null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null
-                    ],
-                    [
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
+                        {
+                            "_$type": "LogBlock",
+                            "x": 53,
+                            "y": 25
+                        },
                         null,
                         null,
                         null,
@@ -10748,7 +10763,11 @@
                         null,
                         null,
                         null,
-                        null,
+                        {
+                            "_$type": "LogBlock",
+                            "x": 54,
+                            "y": 25
+                        },
                         null,
                         null,
                         null,
@@ -10766,7 +10785,55 @@
                         null,
                         null,
                         null,
+                        {
+                            "_$type": "LogBlock",
+                            "x": 55,
+                            "y": 25
+                        },
                         null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null
+                    ],
+                    [
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        {
+                            "_$type": "LogBlock",
+                            "x": 56,
+                            "y": 25
+                        },
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null
+                    ],
+                    [
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        {
+                            "_$type": "LogBlock",
+                            "x": 57,
+                            "y": 25
+                        },
                         null,
                         null,
                         null,
