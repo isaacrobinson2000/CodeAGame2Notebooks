@@ -340,14 +340,22 @@ function _bound(val, low, high) {
 }
 
 class Camera {
-    constructor(canvas, blockSize, minPixelsShown, trackBoxRatio = 1 / 3) {
+    constructor(canvas, blockSize, minPixelsShown, trackBox = [1/3, 1/3, 1/3, 1/3]) {
         this._canvas = canvas;
         this._minPixelsShown = minPixelsShown;
         this._blockSize = blockSize;
         this._zoom = 1;
         this._track = null;
         this._centerPoint = [0, 0];
-        this._trackBoxRatio = trackBoxRatio;
+        this._trackBox = trackBox;
+    }
+    
+    setTrackBox(trackBox) {
+        this._trackBox = trackBox;
+    }
+    
+    getTrackBox() {
+        return this._trackBox;
     }
     
     setCenterPoint(cp) {
@@ -389,10 +397,10 @@ class Camera {
             let [cx, cy, cw, ch] = this.getBounds();
             let [centX, centY] = this._centerPoint;
             let trackBox = [
-                centX - this._trackBoxRatio * (cw / 2), 
-                centY - this._trackBoxRatio * (ch / 2), 
-                this._trackBoxRatio * cw,
-                this._trackBoxRatio * ch
+                centX - (0.5 - this._trackBox[0]) * cw, 
+                centY - (0.5 - this._trackBox[1]) * ch, 
+                this._trackBox[2] * cw,
+                this._trackBox[3] * ch
             ];
             
             // Move x coordinate of tracking box over the tracked object.
@@ -458,9 +466,16 @@ elem_proto.makeBaseGame = async function(gameLoop, gameState = {}, levelData = {
     let newDiv = $($.parseHTML("<div style='position: fixed; z-index: 300; top: 0; bottom: 0; left: 0; right: 0; background-color: white;'></div>"));
     let newCanvas = $($.parseHTML("<canvas style='width: 100%; height: 100%;'>Your browser doesn't support canvas!</canvas>"));
     let closeBtn = $($.parseHTML("<button style='position: absolute; top: 0; right: 0;'>X</button>"));
+    
+    let loadDiv = $($.parseHTML("<div style='position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background-color: transparent;'></div>"));
+    let loadTxt = $($.parseHTML("<p style='font: 38px sans-serif; text-align: center;'>LOADING...</p>"));
+    let loadBar = $($.parseHTML("<progress style='width: 100%;'></progress>"));
+    loadDiv.append(loadTxt);
+    loadDiv.append(loadBar);
         
     newDiv.append(newCanvas);
     newDiv.append(closeBtn);
+    newDiv.append(loadDiv);
     
     $(document.body).append(newDiv);
     
@@ -478,27 +493,48 @@ elem_proto.makeBaseGame = async function(gameLoop, gameState = {}, levelData = {
     gameState.sprites = {};
     gameState.sounds = {};
     
-    gameState.painter.save();
-    gameState.painter.font = "48px serif";
-    gameState.painter.textAlign = "center";
-    gameState.painter.textBaseline = "bottom";
-    gameState.painter.fillText("Loading...", gameState.painter.width / 2, gameState.painter.height / 2);
+    // If the close button is clicked delete the div and terminate the game loop. Also reattach jupyter keyboard events.
+    closeBtn.click(() => {
+        newDiv.remove();
+        gameState.keepRunning = false;
+        doc.off(".gameloop");
+        try {
+            Jupyter.keyboard_manager.bind_events();
+        } catch(e) {
+            console.log(e);
+        }
+    });
+    
+    loadBar.prop("max", Object.keys(levelData.sprites ?? {}).length + Object.keys(levelData.sounds ?? {}).length + 1)
     
     for(let spriteName in (levelData.sprites ?? {})) {
-        gameState.sprites[spriteName] = await getSpriteBuilder(levelData.sprites[spriteName]);
+        try {
+            gameState.sprites[spriteName] = await getSpriteBuilder(levelData.sprites[spriteName]);
+            loadBar.prop("value", loadBar.prop("value") + 1);
+        } catch(exp) {
+            loadTxt.text("Error: Unable to load asset '" + spriteName + "', image '" + levelData.sprites[spriteName].image + "' not found.");
+            throw exp;
+        }
     }
     
     for(let soundName in (levelData.sounds ?? {})) {
-        gameState.sounds[soundName] = await getSoundBuilder(levelData.sounds[soundName]);
+        try {
+            gameState.sounds[soundName] = await getSoundBuilder(levelData.sounds[soundName]);
+            loadBar.prop("value", loadBar.prop("value") + 1);
+        } catch(exp) {
+            loadTxt.text("Error: Unable to load asset " + soundName + ", because '" + exp + "'");
+            throw exp;
+        }
     }
     
     try {
         gameState.level = (levelData.level != null)? await loadJSON(levelData.level): {};
+        loadBar.prop("value", loadBar.prop("value") + 1);
     } catch(exp) {
         gameState.level = {};
     }
-
-    gameState.painter.restore();
+        
+    loadDiv.remove();
     
     function loopManager(timeStamp) {
         let {width, height} = gameState.canvas.getBoundingClientRect();
@@ -554,18 +590,6 @@ elem_proto.makeBaseGame = async function(gameLoop, gameState = {}, levelData = {
     
     doc.on("keyup.gameloop", (event) => {
         delete gameState.keysPressed[event.code];
-    });
-    
-    // If the close button is clicked delete the div and terminate the game loop. Also reattach jupyter keyboard events.
-    closeBtn.click(() => {
-        newDiv.remove();
-        gameState.keepRunning = false;
-        doc.off(".gameloop");
-        try {
-            Jupyter.keyboard_manager.bind_events();
-        } catch(e) {
-            console.log(e);
-        }
     });
     
     // Start the game loop.
