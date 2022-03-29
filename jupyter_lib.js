@@ -685,12 +685,9 @@ class GameCollisionObject extends GameObject {
         
         this.___px = x;
         this.___py = y;
-        this._vx = null;
-        this._vy = null;
         
         this._collisionSides = {"left": true, "top": true, "right": true, "bottom": true};
         this._movable = false;
-        this.___covered = [false, false];
     }
     
     __intersection(boxSeg, dvec, boxSeg2, dvec2, ignoreT = false) {
@@ -769,10 +766,6 @@ class GameCollisionObject extends GameObject {
     }
     
     onCollision(other) {
-        if(this._movable && (this._vx == null || this._vy == null)) {
-            throw "Error: Must store velocity in _vx and _vy for game collision objects!";
-        }
-                        
         if(this._movable && (other instanceof GameCollisionObject)) {
             // Gives us direction of move...
             let [dx, dy] = this.__getDisplacementVector();
@@ -809,9 +802,7 @@ class GameCollisionObject extends GameObject {
         let [_x, _y, width, height] = this.getHitBox();
         let [[x, y], ax, len] = bound;
 
-        //if(this.___covered[boundIdx]) return;
         if(!this._movable) return;
-        this.___covered[ax] = true;
 
         let sign = GameCollisionObject.sideSigns[boundIdx];
         let [sdx, sdy] = this.__getDisplacementVector().map((e) => Math.sign(e));
@@ -820,9 +811,6 @@ class GameCollisionObject extends GameObject {
         let cY = y - ((sign + 1) * height / 2);
         this.x = (ax == 0 || sdx != sign)? this.x: cX;
         this.y = (ax == 1 || sdy != sign)? this.y: cY;
-        
-        this._vx *= (ax == 1 && Math.sign(this._vx) == sign)? !this.___covered[1]: 1;
-        this._vy *= (ax == 0 && Math.sign(this._vy) == sign)? !this.___covered[0]: 1;
     }
     
     onCollisionEnd() {
@@ -830,7 +818,6 @@ class GameCollisionObject extends GameObject {
         
         this.___px = this.x;
         this.___py = this.y;
-        this.___covered = [false, false];
     }
     
     static manageAllCollisions() {

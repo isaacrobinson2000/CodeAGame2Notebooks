@@ -209,11 +209,16 @@ class Player extends GameCollisionObject {
         if(side == "bottom") {
             this._numJumps = Infinity;
             if(this._sprite.getAnimation() == "jump") this._sprite.setAnimation("stand");
-            if(obj instanceof Enemy) this._vy = -this._pvy;
+            if(obj instanceof Enemy) this._vy = -this._vy;
+            else this._vy = 0;
         }
         else if(obj instanceof Enemy && this._waitTime <= 0) {
             this._hp -= 2;
             this._waitTime = 1000;
+        }
+        
+        if(side == "left" || side == "right") {
+            if(!(obj instanceof Ball)) this._vx = 0;
         }
     }
     
@@ -251,7 +256,7 @@ class Enemy extends GameCollisionObject {
         
         let dist = Math.sqrt((px - this.x) * (px - this.x) + (py - this.y) * (py - this.y));
         
-        this._ax = (dist < 6)? 0.03 / 1000 * Math.sign(px - this.x): 0;
+        this._ax = (dist < 9)? 0.03 / 1000 * Math.sign(px - this.x): 0;
         
         if(this._ax != 0) {
             this._sprite.setHorizontalFlip(this._ax > 0);
@@ -291,6 +296,8 @@ class Enemy extends GameCollisionObject {
     }
     
     handleCollision(obj, side) {
+        if(side == "bottom") this._vy = 0;
+        
         if((obj instanceof Player) && side == "top") {
             this._hp = 0;
         }
@@ -308,6 +315,74 @@ class Enemy extends GameCollisionObject {
     getHitBox() {
         let [xi, yi, wi, hi] = this._inset;
         return [this.x, this.y, wi, hi];
+    }
+}
+
+class Ball extends GameCollisionObject {
+    constructor(x, y, sprites) {
+        super(x, y, sprites);
+        this._sprite = sprites.beachBallSprite.buildSprite();
+        this._sprite.setAnimation("still");
+        this._vx = 0;
+        this._vy = 0;
+        this._ay = 0.04 / 1000;
+        this._fric_fac = 0.95;
+        this._inset = [10 / 32, 0 / 32, 73 / 32, 16 / 32];
+        this._blocksBelow = [false, false];
+        
+        this._hp = 5;
+        
+        this._movable = true;
+    }
+    
+    update(timeStep, gameState) {
+        this._vx *= this._fric_fac;
+        this._vy += this._ay * timeStep;
+        this._vy *= this._fric_fac;
+        
+        this._pvx = this._vx;
+        this._pvy = this._vy;
+        
+        this.x += this._vx * timeStep;
+        this.y += this._vy * timeStep;
+        
+        if(Math.abs(this._vx) > 0.0001) this._sprite.setAnimation("spin");
+        else this._sprite.setAnimation("still");
+        this._sprite.setHorizontalFlip(this._vx < 0);
+        this._sprite.update(timeStep);
+    }
+    
+    draw(canvas, painter, camera) {
+        let [cx, cy, cw, ch] = camera.transformBox(this.getHitBox());
+        this._sprite.draw(painter, cx, cy, cw, ch);
+    }
+    
+    drawPreview(canvas, painter, box) {
+        let [cx, cy, cw, ch] = box;        
+        this._sprite.draw(painter, cx, cy, cw, ch);
+    }
+    
+    handleCollision(obj, side) {
+        if(side == "top" || side == "bottom") {
+            if(obj instanceof Ball) {
+                this._vy = ((side == "top")? 1: -1) * Math.abs(obj._vy) * 0.8;
+            }
+            else {
+                this._vy = ((side == "top")? 1: -1) * Math.abs(this._vy) + (obj._vy ?? 0) * 0.8;
+            }
+        }
+        else {
+            let vx = this._vx;
+            
+            if(obj instanceof Ball) {
+                this._vx = ((side == "left")? 1: -1) * Math.abs(obj._vx) * 0.8;
+                this._vy -= 0.02;
+            }
+            else {
+                this._vx = ((side == "left")? 1: -1) * Math.abs(this._vx + 0.01) + (obj._vx ?? 0) * 0.8;
+                this._vy -= 0.02;
+            }
+        }
     }
 }
 
@@ -388,6 +463,17 @@ let levelData = {
         },
         logSprite: {
             image: "images/log.png"
+        },
+        beachBallSprite: {
+            image: "images/beachball.png",
+            animations: {
+                "still": {
+                    "frames": [0]
+                },
+                "spin": {
+                    "speed": 100
+                }
+            }
         }
     }
 };
@@ -411,4 +497,4 @@ let callbacks = {
     }
 };
 
-element.makeGame("testdata/test_level.json", [GameBlock, GameBlock2, Tree, Grass, LogBlock], [Enemy], levelData, Player, callbacks=callbacks);
+element.makeGame("testdata/test_level.json", [GameBlock, GameBlock2, Tree, Grass, LogBlock], [Enemy, Ball], levelData, Player, callbacks=callbacks);
