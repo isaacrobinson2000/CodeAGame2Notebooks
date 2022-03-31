@@ -340,7 +340,7 @@ function _bound(val, low, high) {
 }
 
 class Camera {
-    constructor(canvas, blockSize, minPixelsShown, trackBox = [1/3, 1/3, 1/3, 1/3]) {
+    constructor(canvas, blockSize, minPixelsShown, trackBox = [1/3, 1/3, 1/3, 1/3], subCanvasBox = [0, 0, 1, 1]) {
         this._canvas = canvas;
         this._minPixelsShown = minPixelsShown;
         this._blockSize = blockSize;
@@ -348,6 +348,7 @@ class Camera {
         this._track = null;
         this._centerPoint = [0, 0];
         this._trackBox = trackBox;
+        this._subBox = subCanvasBox;
     }
     
     setTrackBox(trackBox) {
@@ -368,6 +369,14 @@ class Camera {
     
     setTrackedObject(track) {
         this._track = track;
+    }
+    
+    setSubCanvasBox(box) {
+        this._subBox = box;
+    }
+    
+    getSubCanvasBox() {
+        return this._subBox;
     }
     
     getMinimumPixelsShown() {
@@ -433,11 +442,17 @@ class Camera {
     transform(point) {
         let [x, y] = point;
         
+        let [xp, yp, wp, hp] = this.getSubCanvasBox();
         let [gx, gy, gw, gh] = this.getBounds();
-        let cw = this._canvas.width;
-        let ch = this._canvas.height;
+        let cx = this._canvas.width * xp;
+        let cy = this._canvas.height * yp;
+        let cw = this._canvas.width * wp;
+        let ch = this._canvas.height * hp;
         
-        return [((x - gx) / gw) * cw, ((y - gy) / gh) * ch]
+        return [
+            ((x - gx) / gw) * cw + cx, 
+            ((y - gy) / gh) * ch + cy
+        ];
     }
     
     transformBox(box) {
@@ -452,11 +467,14 @@ class Camera {
     reverseTransform(point) {
         let [x, y] = point;
         
+        let [xp, yp, wp, hp] = this.getSubCanvasBox();
         let [gx, gy, gw, gh] = this.getBounds();
-        let cw = this._canvas.width;
-        let ch = this._canvas.height;
+        let cx = this._canvas.width * xp;
+        let cy = this._canvas.height * yp;
+        let cw = this._canvas.width * wp;
+        let ch = this._canvas.height * hp;
         
-        return [((x / cw) * gw) + gx, ((y / ch) * gh) + gy];
+        return [(((x - cx) / cw) * gw) + gx, (((y - cy) / ch) * gh) + gy];
     }
 }
 
@@ -488,16 +506,21 @@ elem_proto.makeBaseGame = async function(gameLoop, gameState = {}, levelData = {
     gameState.keysPressed = {};
     gameState.mousePressed = false;
     gameState.mouseLocation = [0, 0];
+    gameState.paused = false;
     gameState.camera = new Camera(newCanvas[0], blockSize, minPixelsShown);
     
     gameState.sprites = {};
     gameState.sounds = {};
+    
+    let doc = $(document);
+    let win = $(window);
     
     // If the close button is clicked delete the div and terminate the game loop. Also reattach jupyter keyboard events.
     closeBtn.click(() => {
         newDiv.remove();
         gameState.keepRunning = false;
         doc.off(".gameloop");
+        win.off(".gameloop");
         try {
             Jupyter.keyboard_manager.bind_events();
         } catch(e) {
@@ -547,6 +570,8 @@ elem_proto.makeBaseGame = async function(gameLoop, gameState = {}, levelData = {
         gameState.painter.webkitImageSmoothingEnabled = false; 
         gameState.painter.msImageSmoothingEnabled = false; 
         
+        if(gameState.paused) gameState.lastTimeStamp = null;
+        
         let timeStep = (gameState.lastTimeStamp == null)? 0: timeStamp - gameState.lastTimeStamp;
         
         gameLoop(timeStep, gameState);
@@ -580,7 +605,6 @@ elem_proto.makeBaseGame = async function(gameLoop, gameState = {}, levelData = {
     closeBtn.mousemove(false);
     
     // Manage keyboard events, keep track of pressed keys in special property in the gameState object.
-    let doc = $(document);
     // We have to disable all other keyevents as jupyter notebook doesn't play nicely with keyboard input.
     doc.off("keydown");
     
@@ -590,6 +614,19 @@ elem_proto.makeBaseGame = async function(gameLoop, gameState = {}, levelData = {
     
     doc.on("keyup.gameloop", (event) => {
         delete gameState.keysPressed[event.code];
+    });
+
+    win.on("blur.gameloop", (event) => {
+        gameState.lastTimeStamp = null;
+        gameState.paused = true;
+        // Manually run the game loop to allow the game to handle the pause...
+        // This handles cases where the user has switched tabs, which causes the game loop to
+        // pause execution immediately.
+        gameLoop(0, gameState);
+    });
+
+    win.on("focus.gameloop", (event) => {
+        gameState.paused = false;
     });
     
     // Start the game loop.
@@ -621,10 +658,10 @@ function runPython(code) {
     });
 }
 
-function _makeEmptyLevel() {
+function _makeEmptyLevel(width = 10, height = 10) {
     let level = {
         "chunkSize": 16,
-        "numChunks": [10, 10],
+        "numChunks": [width, height],
         "player": null,
         "chunks": []
     };
@@ -806,6 +843,7 @@ class GameCollisionObject extends GameObject {
 
             for(let i = 0; i < thisSides.length; i++) {
                 if((oSides[i] == null) || (thisSides[i] == null)) continue;
+                
                 let [time, overlap, bound] = this.__intersection(thisSides[i], [dx, dy], oSides[i], [dx2, dy2], true);
 
                 if(bestTime > time) {
@@ -844,6 +882,16 @@ class GameCollisionObject extends GameObject {
         this.___py = this.y;
     }
     
+    __insideCheck(otherObj) {
+        let [x, y, w, h] = this.getHitBox();
+        let [ox, oy, ow, oh] = otherObj.getHitBox();
+        
+        return (
+            !((x >= (ox + ow)) || ((x + w) <= ox))
+            && !((oy >= (y + h)) || ((oy + oh) <= y))
+        );
+    }
+    
     static manageAllCollisions() {
         if(GameCollisionObject.finalPassDone) return;
         
@@ -864,9 +912,20 @@ class GameCollisionObject extends GameObject {
             
             let [t, overlap, bound] = obj.__intersection(thisB, dvec1, otherB, dvec2);
             
-            if(overlap <= 0 || bound == null) continue;
-            let [[x, y], ax, len] = bound;
-            let snames = GameCollisionObject.sideNames;
+            if(overlap <= 0 || bound == null) {
+                // Do the objects overlap in this frame? If so, trigger an 'inside' event.
+                if(obj.__insideCheck(otherObj)) {
+                    obj.handleCollision(otherObj, "inside");
+                    otherObj.handleCollision(obj, "inside");
+                }
+                continue;
+            }
+            
+            let [delta1, delta2] = (thisB[1])? [dvec1[0], dvec2[0]]: [dvec1[1], dvec2[1]];
+            let direc = Math.sign((delta1 - delta2) * Math.abs(t));
+            if(direc != GameCollisionObject.sideSigns[boundIdx] && direc != 0) continue;
+            
+            let [[x, y], ax, len] = bound;            
             
             // Move both objects....
             if(obj.isSolid(otherObj, sideNames[sideSwap[boundIdx]]) && otherObj.isSolid(obj, sideNames[boundIdx])) {

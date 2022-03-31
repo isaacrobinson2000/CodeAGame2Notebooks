@@ -12,7 +12,7 @@ class LogBlock extends GameCollisionObject {
     
     draw(canvas, painter, camera) {
         // Implement this:
-        let [cx, cy, cw, ch] = camera.transformBox([this.x, this.y, 1, 1]);
+        let [cx, cy, cw, ch] = camera.transformBox([this.x, this.y - 3/32, 1, 1]);
         this._sprite.draw(painter, cx, cy, cw, ch);
     }
     
@@ -127,10 +127,10 @@ class Player extends GameCollisionObject {
         this._pvx = 0;
         this._pvy = 0;
         this._ax = 0;
-        this._ay = 0.09 / 1000;
+        this._ay = 0.085 / 1000;
         this._priorUp = false;
         this._numJumps = Infinity;
-        this._fric_facx = 0.96;
+        this._fric_facx = 0.915;
         this._fric_facy = 0.9999;
         this._waitTime = 0;
         
@@ -154,17 +154,17 @@ class Player extends GameCollisionObject {
         
         this._ax = 0;
         if("ArrowLeft" in keys) {
-            this._ax -= 0.05 / 1000;
+            this._ax -= 0.1 / 1000;
             anim = "run";
             this._sprite.setHorizontalFlip(true);
         }
         if("ArrowRight" in keys) {
-            this._ax += 0.05 / 1000;
+            this._ax += 0.1 / 1000;
             anim = "run";
             this._sprite.setHorizontalFlip(false);
         }
         if(!this._priorUp && ("ArrowUp" in keys) && (this._numJumps > 0)) {
-            this._vy = -20 / 1000;
+            this._vy = -22 / 1000;
             this._numJumps--;
             anim = "jump";
         }
@@ -206,6 +206,7 @@ class Player extends GameCollisionObject {
     }
     
     handleCollision(obj, side) {
+        if(side == "inside") return;
         if(side == "bottom") {
             this._numJumps = Infinity;
             if(this._sprite.getAnimation() == "jump") this._sprite.setAnimation("stand");
@@ -363,6 +364,7 @@ class Ball extends GameCollisionObject {
     }
     
     handleCollision(obj, side) {
+        if(side == "inside") return;
         if(side == "top" || side == "bottom") {
             if(obj instanceof Ball) {
                 this._vy = ((side == "top")? 1: -1) * Math.abs(obj._vy) * 0.8;
