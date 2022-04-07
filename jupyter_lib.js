@@ -1,5 +1,11 @@
 // Print to notebook cell output...
-let elem_proto = Object.getPrototypeOf(element);
+let elem_proto = null;
+
+try {
+    elem_proto = Object.getPrototypeOf(element);
+} catch(exp) {
+    elem_proto = {};
+}
 
 elem_proto.println = function(obj){
     this.append(((obj === undefined)? "": obj) + "<br>\n");
@@ -339,13 +345,31 @@ function _bound(val, low, high) {
     return Math.max(low, Math.min(high, val));
 }
 
+function _adjustTrackBox(trackBox, hitBox) {
+    let [x, y, w, h] = hitBox;
+    let cx = x + w / 2;
+    let cy = y + h / 2;
+                        
+    // Move x coordinate of tracking box over the tracked object.
+    if(cx < trackBox[0]) trackBox[0] = cx;
+    else if(cx > (trackBox[0] + trackBox[2])) trackBox[0] = cx - trackBox[2];
+    // Move y coordinate also...
+    if(cy < trackBox[1]) trackBox[1] = cy;
+    else if(cy > (trackBox[1] + trackBox[3])) trackBox[1] = cy - trackBox[3];
+}
+
+function _computeAdjustedZoom(zoomVal, trackBox, hitBox) {
+    // TODO...
+}
+
 class Camera {
-    constructor(canvas, blockSize, minPixelsShown, trackBox = [1/3, 1/3, 1/3, 1/3], subCanvasBox = [0, 0, 1, 1]) {
+    constructor(canvas, blockSize, minBlocksShown, maxBlocksShown, maxZoomAdjustment = 0.5, trackBox = [1/3, 1/3, 1/3, 1/3], subCanvasBox = [0, 0, 1, 1]) {
         this._canvas = canvas;
-        this._minPixelsShown = minPixelsShown;
         this._blockSize = blockSize;
+        this._minBlocksShown = minBlocksShown;
+        this._maxBlocksShown = maxBlocksShown;
         this._zoom = 1;
-        this._track = null;
+        this._tracks = [];
         this._centerPoint = [0, 0];
         this._trackBox = trackBox;
         this._subBox = subCanvasBox;
@@ -367,8 +391,12 @@ class Camera {
         return this._centerPoint;
     }
     
-    setTrackedObject(track) {
-        this._track = track;
+    setTracks(track) {
+        this._tracks = track;
+    }
+    
+    getTracks() {
+        return this._tracks;
     }
     
     setSubCanvasBox(box) {
@@ -377,6 +405,19 @@ class Camera {
     
     getSubCanvasBox() {
         return this._subBox;
+    }
+    
+    getDisplayZone() {
+        let [mx, my, mw, mh] = this._subBox;
+        let cw = this._canvas.width;
+        let ch = this._canvas.height;
+        
+        return [
+            mx * cw,
+            my * ch,
+            mw * cw,
+            mh * ch
+        ];
     }
     
     getMinimumPixelsShown() {
@@ -388,47 +429,65 @@ class Camera {
     }
     
     getMinimumBlocksShown() {
-        return this._minPixelsShown / this._blockSize;
+        return this._minBlocksShown;
     }
     
     setMinimumBlocksShown(value) {
-        return this._minPixelsShown = value * this._blockSize;
+        return this._minBlocksShown = value;
+    }
+    
+    getMaximumBlocksShown() {
+        return this._maxBlocksShown;
+    }
+    
+    setMaximumBlocksShown(value) {
+        return this._maxBlocksShown = value;
     }
     
     update(levelBounds) {
         let minCanvasSide = Math.min(this._canvas.width, this._canvas.height);
-        this._zoom = minCanvasSide / (this._minPixelsShown / this._blockSize);
+        let maxCanvasSide = Math.max(this._canvas.width, this._canvas.height);
+        this._zoom = Math.max(minCanvasSide / this._minBlocksShown, maxCanvasSide / this._maxBlocksShown);
         
-        if((this._track != null) && ("getHitBox" in this._track)) {
-            let [x, y, w, h] = this._track.getHitBox();
+        // Get the current track box...
+        let [cx, cy, cw, ch] = this.getBounds();
+        let [centX, centY] = this._centerPoint;
+        let trackBox = [
+            centX - (0.5 - this._trackBox[0]) * cw, 
+            centY - (0.5 - this._trackBox[1]) * ch, 
+            this._trackBox[2] * cw,
+            this._trackBox[3] * ch
+        ];
+        
+        // Adjust the tracking box using currently tracked objects (if there are any)...
+        if((this._tracks.length > 0)) {
+            let firstObject = null;
             
-            // If object is not within track box, move the track box to put it in bounds....
-            let [cx, cy, cw, ch] = this.getBounds();
-            let [centX, centY] = this._centerPoint;
-            let trackBox = [
-                centX - (0.5 - this._trackBox[0]) * cw, 
-                centY - (0.5 - this._trackBox[1]) * ch, 
-                this._trackBox[2] * cw,
-                this._trackBox[3] * ch
-            ];
-            
-            // Move x coordinate of tracking box over the tracked object.
-            if(x < trackBox[0]) trackBox[0] = x;
-            else if(x > (trackBox[0] + trackBox[2])) trackBox[0] = x - trackBox[2];
-            // Move y coordinate also...
-            if(y < trackBox[1]) trackBox[1] = y;
-            else if(y > (trackBox[1] + trackBox[3])) trackBox[1] = y - trackBox[3];
-            
-            this._centerPoint = [trackBox[0] + trackBox[2] / 2, trackBox[1] + trackBox[3] / 2];
-            
-            // Bound the camera...
-            [cx, cy, cw, ch] = this.getBounds();
-            let [xOut, yOut] = [this._centerPoint[0] - cx, this._centerPoint[1] - cy];
-            
-            let [newCx, newCy] = [_bound(cx, 0, levelBounds[0] - cw), _bound(cy, 0, levelBounds[1] - ch)];
-            
-            this._centerPoint = [newCx + xOut, newCy + yOut];
+            for(let elem of this._tracks) {
+                if(!("getHitBox" in elem)) continue;
+                let hitBox = elem.getHitBox();
+                
+                if(firstObject == null) {
+                    // FIRST OBJECT: Move the tracking box to place the object in bounds...
+                    _adjustTrackBox(trackBox, hitBox);
+                    firstObject = elem;
+                }
+                else {
+                    throw "Not implemented yet!";
+                    // Reajust zoom, move to object, move to first object...
+                }
+            }
         }
+        
+        this._centerPoint = [trackBox[0] + trackBox[2] / 2, trackBox[1] + trackBox[3] / 2];
+            
+        // Bound the camera based on the level bounds...
+        [cx, cy, cw, ch] = this.getBounds();
+        let [xOut, yOut] = [this._centerPoint[0] - cx, this._centerPoint[1] - cy];
+        
+        let [newCx, newCy] = [_bound(cx, 0, levelBounds[0] - cw), _bound(cy, 0, levelBounds[1] - ch)];
+        
+        this._centerPoint = [newCx + xOut, newCy + yOut];
     }
     
     getBounds() {
@@ -480,7 +539,7 @@ class Camera {
 
 window.Camera = Camera;
 
-elem_proto.makeBaseGame = async function(gameLoop, gameState = {}, levelData = {}, blockSize = 32, minPixelsShown = 32 * 10) {
+elem_proto.makeBaseGame = async function(gameLoop, gameState = {}, assets = {}, zones = {}, levelGen = null) {
     let newDiv = $($.parseHTML("<div style='position: fixed; z-index: 300; top: 0; bottom: 0; left: 0; right: 0; background-color: white;'></div>"));
     let newCanvas = $($.parseHTML("<canvas style='width: 100%; height: 100%;'>Your browser doesn't support canvas!</canvas>"));
     let closeBtn = $($.parseHTML("<button style='position: absolute; top: 0; right: 0;'>X</button>"));
@@ -504,13 +563,16 @@ elem_proto.makeBaseGame = async function(gameLoop, gameState = {}, levelData = {
     gameState.canvas = newCanvas[0];
     gameState.painter = gameState.canvas.getContext("2d");
     gameState.keysPressed = {};
-    gameState.mousePressed = false;
-    gameState.mouseLocation = [0, 0];
+    gameState.mouse = {
+        pressed: false,
+        location: [0, 0]
+    };
     gameState.paused = false;
-    gameState.camera = new Camera(newCanvas[0], blockSize, minPixelsShown);
     
-    gameState.sprites = {};
-    gameState.sounds = {};
+    gameState.assets = {};
+    gameState.assets.sprites = {};
+    gameState.assets.sounds = {};
+    gameState.zones = {};
     
     let doc = $(document);
     let win = $(window);
@@ -528,21 +590,21 @@ elem_proto.makeBaseGame = async function(gameLoop, gameState = {}, levelData = {
         }
     });
     
-    loadBar.prop("max", Object.keys(levelData.sprites ?? {}).length + Object.keys(levelData.sounds ?? {}).length + 1)
+    loadBar.prop("max", Object.keys(assets.sprites ?? {}).length + Object.keys(assets.sounds ?? {}).length + Object.keys(zones).length)
     
-    for(let spriteName in (levelData.sprites ?? {})) {
+    for(let spriteName in (assets.sprites ?? {})) {
         try {
-            gameState.sprites[spriteName] = await getSpriteBuilder(levelData.sprites[spriteName]);
+            gameState.assets.sprites[spriteName] = await getSpriteBuilder(assets.sprites[spriteName]);
             loadBar.prop("value", loadBar.prop("value") + 1);
         } catch(exp) {
-            loadTxt.text("Error: Unable to load asset '" + spriteName + "', image '" + levelData.sprites[spriteName].image + "' not found.");
+            loadTxt.text("Error: Unable to load asset '" + spriteName + "', image '" + assets.sprites[spriteName].image + "' not found.");
             throw exp;
         }
     }
     
-    for(let soundName in (levelData.sounds ?? {})) {
+    for(let soundName in (assets.sounds ?? {})) {
         try {
-            gameState.sounds[soundName] = await getSoundBuilder(levelData.sounds[soundName]);
+            gameState.assets.sounds[soundName] = await getSoundBuilder(assets.sounds[soundName]);
             loadBar.prop("value", loadBar.prop("value") + 1);
         } catch(exp) {
             loadTxt.text("Error: Unable to load asset " + soundName + ", because '" + exp + "'");
@@ -550,11 +612,19 @@ elem_proto.makeBaseGame = async function(gameLoop, gameState = {}, levelData = {
         }
     }
     
-    try {
-        gameState.level = (levelData.level != null)? await loadJSON(levelData.level): {};
-        loadBar.prop("value", loadBar.prop("value") + 1);
-    } catch(exp) {
-        gameState.level = {};
+    for(let zoneName in zones) {
+        try {
+            gameState.zones[zoneName] = await getZoneBuilder(zones[zoneName]);
+            loadBar.prop("value", loadBar.prop("value") + 1);
+        } catch(exp) {
+            if(levelGen == null) {
+                loadTxt.text("Error: Unable to load zone " + zone + ", because '" + exp + "'");
+                throw exp;
+            }
+            else {
+                gameState.zones[zoneName] = await levelGen(zoneName, zones[zoneName]);
+            }
+        }
     }
         
     loadDiv.remove();
@@ -585,18 +655,18 @@ elem_proto.makeBaseGame = async function(gameLoop, gameState = {}, levelData = {
     
     // Mouse support....
     newDiv.mousedown((e) => {
-        gameState.mouseLocation = [e.offsetX, e.offsetY];
-        gameState.mousePressed = true;
+        gameState.mouse.location = [e.offsetX, e.offsetY];
+        gameState.mouse.pressed = true;
         return false;
     });
     
     newDiv.mousemove((e) => {
-        gameState.mouseLocation = [e.offsetX, e.offsetY];
+        gameState.mouse.location = [e.offsetX, e.offsetY];
     });
     
     newDiv.mouseup((e) => {
-        gameState.mouseLocation = [e.offsetX, e.offsetY];
-        gameState.mousePressed = false;
+        gameState.mouse.location = [e.offsetX, e.offsetY];
+        gameState.mouse.pressed = false;
         return false;
     });
     
@@ -658,11 +728,11 @@ function runPython(code) {
     });
 }
 
-function _makeEmptyLevel(width = 10, height = 10) {
+function _makeEmptyLevel(width = 10, height = 10, chunkSize = 16) {
     let level = {
-        "chunkSize": 16,
+        "chunkSize": chunkSize,
         "numChunks": [width, height],
-        "player": null,
+        "players": [],
         "chunks": []
     };
     let chunks = level.chunks;
@@ -692,7 +762,7 @@ function _makeEmptyChunk(chunkSize) {
 }
 
 class GameObject {
-    constructor(x, y, sprites) {
+    constructor(x, y, assets) {
         this.x = x;
         this.y = y;
     }
@@ -722,8 +792,8 @@ class GameObject {
         return obj;
     }
     
-    static fromJSON(data, sprites) {
-        let obj = new this(data.x, data.y, sprites);
+    static fromJSON(data, assets) {
+        let obj = new this(data.x, data.y, assets);
         
         for(let prop in data) {
             if(!prop.startsWith("_")) obj[prop] = data[prop];
@@ -735,14 +805,19 @@ class GameObject {
     getHitBox() {
         return [this.x, this.y, 1, 1];
     }
+    
+    getZOrder() {
+        return 0;
+    }
 }
+
 window.GameObject = GameObject;
 
 
 class GameCollisionObject extends GameObject {
     
-    constructor(x, y, sprites) {
-        super(x, y, sprites);
+    constructor(x, y, assets) {
+        super(x, y, assets);
         
         this.___px = x;
         this.___py = y;
@@ -967,8 +1042,10 @@ GameCollisionObject.sideSwaps = [1, 0, 3, 2];
 
 window.GameCollisionObject = GameCollisionObject;
 
-
-function _loadChunk(cx, cy, level, blockTypes, entityTypes, sprites) {    
+/*
+ * CHUNK MANAGEMENT FUNCTIONS:
+ */
+function _loadChunk(cx, cy, level, blockTypes, entityTypes, assets) {    
     let chunkSize = level.chunkSize;
     let newLoadedChunk = _makeEmptyChunk(chunkSize);
     
@@ -980,13 +1057,13 @@ function _loadChunk(cx, cy, level, blockTypes, entityTypes, sprites) {
             let bx = cx * chunkSize + x;
             let by = cy * chunkSize + y;
 
-            newLoadedChunk.blocks[x][y] = (blockName != null)? blockTypes[blockName].fromJSON(blockData, sprites): null;
+            newLoadedChunk.blocks[x][y] = (blockName != null)? blockTypes[blockName].fromJSON(blockData, assets): null;
         }
     }
     
-    // Load sprites...
+    // Load entities...
     for(let data of level.chunks[cx][cy].entities) {
-        newLoadedChunk.entities.push(entityTypes[data._$type].fromJSON(data, sprites));
+        newLoadedChunk.entities.push(entityTypes[data._$type].fromJSON(data, assets));
     }
     
     return newLoadedChunk;
@@ -1015,22 +1092,36 @@ function _flushLoadedChunks(level, loadedChunks) {
     }
 }
 
-function _manageChunks(level, camera, loadedChunks, blockTypes, entityTypes, sprites) {
-    // Issue: Blocks just dissapear!
-    let [cx, cy, cw, ch] = camera.getBounds();
-        
+function _getChunkBoundsFromCamera(level, camera) {
     let chunkSide = level.chunkSize; 
-    let xStartChunk = Math.max(0, Math.floor(cx / chunkSide));
-    let yStartChunk = Math.max(0, Math.floor(cy / chunkSide));
-    let xEndChunk = Math.min(level.numChunks[0] - 1, Math.ceil((cx + cw) / chunkSide));
-    let yEndChunk = Math.min(level.numChunks[1] - 1, Math.ceil((cy + ch) / chunkSide));
+    let [cx, cy, cw, ch] = camera.getBounds();
     
+    return {
+        xStartChunk: Math.max(0, Math.floor((cx / chunkSide) - 0.5)),
+        yStartChunk: Math.max(0, Math.floor((cy / chunkSide) - 0.5)),
+        xEndChunk: Math.min(level.numChunks[0] - 1, Math.ceil(((cx + cw) + 0.5) / chunkSide)),
+        yEndChunk: Math.min(level.numChunks[1] - 1, Math.ceil(((cy + ch) + 0.5) / chunkSide))
+    };
+}
+
+function _isChunkWithinCameras(level, x, y, chunk, cameras) {
+    for(let camera of cameras) {
+        let {xStartChunk, yStartChunk, xEndChunk, yEndChunk} = _getChunkBoundsFromCamera(level, camera);
+        
+        if((x < xStartChunk || x > xEndChunk) || (y < yStartChunk || y > yEndChunk)) continue;
+        
+        return true;
+    }
+    return false;
+}
+
+function _manageChunks(level, cameras, loadedChunks, blockTypes, entityTypes, assets) {
     let newLoadedChunks = [];
     let doneChunks = {};
     
     // Unload chunks that are out of the area... Keep others loaded...
     for(let [x, y, chunk] of loadedChunks) {
-        if((x < xStartChunk || x > xEndChunk) || (y < yStartChunk || y > yEndChunk)) {
+        if(!_isChunkWithinCameras(level, x, y, chunk, cameras)) {
             _unloadChunk(chunk, x, y, level);
         }
         else {
@@ -1039,11 +1130,15 @@ function _manageChunks(level, camera, loadedChunks, blockTypes, entityTypes, spr
         }
     }
 
-    // Load chunks in area...
-    for(let xic = xStartChunk; xic <= xEndChunk; xic++) {
-        for(let yic = yStartChunk; yic <= yEndChunk; yic++) {
-            if(!([xic, yic] in doneChunks)) {
-                newLoadedChunks.push([xic, yic, _loadChunk(xic, yic, level, blockTypes, entityTypes, sprites)]); 
+    // Load chunks in area that are remaining...
+    for(let camera of cameras) {
+        let {xStartChunk, yStartChunk, xEndChunk, yEndChunk} = _getChunkBoundsFromCamera(level, camera);
+        
+        for(let xic = xStartChunk; xic <= xEndChunk; xic++) {
+            for(let yic = yStartChunk; yic <= yEndChunk; yic++) {
+                if(!([xic, yic] in doneChunks)) {
+                    newLoadedChunks.push([xic, yic, _loadChunk(xic, yic, level, blockTypes, entityTypes, assets)]); 
+                }
             }
         }
     }
@@ -1106,740 +1201,232 @@ function _saveLevelCode(filename, levelData) {
     return LEVEL_EDIT_CODE;
 }
 
-elem_proto.levelEditor = async function(levelPath, blockTypes = [], entityTypes = [], levelData = {}, playerType = null, callbacks = {}) {
-    let level;
-    try {
-        level = (levelPath == null)? _makeEmptyLevel(): await loadJSON(levelPath);
-    } catch(exp) {
-        level = _makeEmptyLevel();
-    }
-    
-    let cameraVelocity = 1 / 1000; // In blocks per millisecond...
-    let cameraMaxZoomIn = 5;
-    let cameraMaxZoomOut = 40;
-    let cameraScaleSpeed = 0.02; // In pixels per millisecond...
-    
-    async function _saveLevel(banner, filename, levelData) {
-        try {
-            let result = await runPython(_saveLevelCode(filename, JSON.stringify(levelData, null, 4)));
-            banner.setText("Saved Successfully.", 1500);
-        } catch(exp) {
-            banner.setText(exp, 3000);
-        }
-    }
-    
-    function _deleteBlock(blockX, blockY, loadedChunk, chunkSize) {
-        blockX = Math.floor(blockX % chunkSize);
-        blockY = Math.floor(blockY % chunkSize);
-        
-        loadedChunk.blocks[blockX][blockY] = null;
-    }
-    
-    function _addBlock(blockX, blockY, loadedChunk, chunkSize, blockClass, sprites) {
-        let cBlockX = Math.floor(blockX % chunkSize);
-        let cBlockY = Math.floor(blockY % chunkSize);
-                                
-        loadedChunk.blocks[cBlockX][cBlockY] = new blockClass(Math.floor(blockX), Math.floor(blockY), sprites);
-    }
-    
-    function _deleteEntity(blockX, blockY, loadedChunk, chunkSize) {
-        for(let i = 0; i < loadedChunk.entities.length; i++) {
-            let entity = loadedChunk.entities[i];
-            
-            let [x, y, w, h] = entity.getHitBox();
-            if((blockX > x) && (blockY > y) && (blockX < x + w) && (blockY < y + h)) {
-                _popAndSwapWithEnd(loadedChunk.entities, i);
-                return;
-            }
-        }
-    }
-    
-    function _addEntity(blockX, blockY, loadedChunk, chunkSize, entityClass, sprites) {
-        loadedChunk.entities.push(new entityClass(blockX, blockY, sprites));
-    }
-    
-    function _setPlayer(blockX, blockY, gameState, playerType, sprites) {
-        if(playerType != null) {
-            gameState.level.player = new playerType(blockX, blockY, sprites);
-        }
-    }
-    
-    class BannerDisplay {
-        constructor(gameState) {
-            this._g = gameState;
-            this._text = "";
-            this._timeLeft = 0;
-            this._style = null;
-            this._color = null;
-        }
-        
-        setText(text = "", time = 3000, color = "black", style = "30px Arial") {
-            this._text = text;
-            this._timeLeft = time;
-            this._style = style;
-            this._color = color;
-        }
-        
-        update(timeStep) {
-            this._timeLeft = Math.max(0, this._timeLeft - timeStep);
-        }
-        
-        draw() {
-            if(this._timeLeft > 0) {
-                let {width, height} = this._g.canvas;
-                
-                this._g.painter.fillStyle = this._color;
-                this._g.painter.font = this._style;
-                this._g.painter.textAlign = "center";
-                
-                this._g.painter.fillText(this._text, width / 2, height / 2);
-            }
-        }
-    }
-    
-    class GameHoverBlock extends GameObject {
-        constructor(x, y, sprites) {
-            super(x, y, sprites);
-            this._sprite = sprites["_levelEditHover"].buildSprite();
-            this._sprite.setAnimation("main");
-            this._numChunks = null;
-            this._chunkSize = null;
-        }
-        
-        update(timeStep, gameState) {
-            if(this._numChunks == null) {
-                this._numChunks = gameState.level.numChunks;
-                this._chunkSize = gameState.level.chunkSize;
-            }
-            
-            [this.x, this.y] = gameState.camera.reverseTransform(gameState.mouseLocation);
-
-            this._sprite.update(timeStep);
-        }
-        
-        getBlockLocation() {
-            let [x, y] = [this.x, this.y];
-            
-            if((x < 0) || (x >= this._numChunks[0] * this._chunkSize)) return [null, null];
-            if((y < 0) || (y >= this._numChunks[1] * this._chunkSize)) return [null, null];
-            
-            return [x, y];
-        }
-        
-        draw(canvas, painter, camera) {
-            let [x, y, w, h] = camera.transformBox([Math.floor(this.x), Math.floor(this.y), 1, 1]);
-            this._sprite.draw(painter, x, y, w, h);
-        }
-    }
-    
-    class GameSelectPanel extends GameObject {
-        constructor(x, y, sprites) {
-            super(x, y, sprites);
-            this._deleteSprite = sprites["_levelEditDelete"].buildSprite();
-            this._itemSize = 1;
-            this._hovered = null;
-            this._selected = null;
-            this._blocks = null;
-            this._entities = null;
-            this._sprites = sprites;
-            this._width = 0;
-            this._overbar = false;
-            this._playerType = null;
-        }
-        
-        _grabSelection(tileX, tileY, entityLen, blockLen) {
-            switch(tileY) {
-                case 0:
-                    return ((tileX >= 0) && (tileX < entityLen + 2))? ["entity", tileX - 2]: null;
-                case 1:
-                    return ((tileX >= 0) && (tileX < blockLen + 1))? ["block", tileX - 1]: null;
-            }
-            
-            return null;
-        }
-        
-        update(timeStep, gameState) {            
-            if(this._blocks == null) {
-                this._blocks = _gameObjMappingToList(gameState.blockTypes);
-                this._entities = _gameObjMappingToList(gameState.entityTypes);
-                this._lookupObj = {
-                    "entity": this._entities,
-                    "block": this._blocks
-                }
-                this._playerType = gameState.playerType;
-            }
-            
-            let [x, y, w, h] = gameState.camera.getBounds();
-            
-            [this._x, this._y] = [x, y];
-            this._width = w;
-            
-            this._itemSize = Math.min(w / (this._blocks.length + 1), 1, w / (this._entities.length + 2));
-            
-            let [mx, my] = gameState.camera.reverseTransform(gameState.mouseLocation);
-            let [tileX, tileY] = [Math.floor((mx - x) / this._itemSize), Math.floor((my - y) / this._itemSize)];
-            
-            this._overbar = tileY < 2 && tileY >= 0;
-            this._hovered = this._grabSelection(tileX, tileY, this._entities.length, this._blocks.length);
-
-            if(gameState.mousePressed && this._hovered != null) {
-                this._selected = this._hovered;
-            }
-
-            this._deleteSprite.update(timeStep);
-        }
-        
-        getOverBar() {
-            return this._overbar;
-        }
-        
-        getSelection() {
-            return (this._selected != null)? [this._selected[0], (this._selected[1] >= 0)? this._lookupObj[this._selected[0]][this._selected[1]]: this._selected[1]]: null;
-        }
-        
-        draw(canvas, painter, camera) {            
-            painter.fillStyle = "#dbdbdb";
-            let [x, y, width, height] = camera.transformBox([this._x, this._y, this._width, this._itemSize * 2]);
-            let step = height / 2;
-            
-            painter.fillRect(x, y, width, height);
-            
-            this._deleteSprite.draw(painter, x, y, step, step);
-            if(this._playerType != null) {
-                (new this._playerType(0, 0, this._sprites)).drawPreview(canvas, painter, [x + step, y, step, step]);
-            }
-            this._deleteSprite.draw(painter, x, y + step, step, step);
-            for(let i = 0; i < this._entities.length; i++) {
-                (new this._entities[i](x + step * (i + 2), y, this._sprites)).drawPreview(canvas, painter, [x + step * (i + 2), y, step, step]);
-            }
-            for(let i = 0; i < this._blocks.length; i++) {
-                (new this._blocks[i](x + step * (i + 1), y + step, this._sprites)).drawPreview(canvas, painter, [x + step * (i + 1), y + step, step, step]);
-            }
-            
-            // Hover object....
-            if(this._hovered != null) {
-                painter.fillStyle = "rgba(46, 187, 230, 0.5)";
-                let [idxOff, yOff] = (this._hovered[0] == "block")? [1, step]: [2, 0];
-                painter.fillRect(x + (this._hovered[1] + idxOff) * step, (this._hovered[0] == "block")? y + yOff: y, step, step);
-            }
-            
-            // Selected Object...
-            if(this._selected != null) {
-                painter.fillStyle = "rgba(27, 145, 181, 0.7)";
-                let [idxOff, yOff] = (this._selected[0] == "block")? [1, step]: [2, 0];
-                painter.fillRect(x + (this._selected[1] + idxOff) * step, (this._selected[0] == "block")? y + yOff: y, step, step);
-            }
-        }
-    }
-    
-    class ActionBar extends GameObject {
-        constructor(x, y, sprites) {
-            super(x, y, sprites);
-            this._sprites = [sprites["_levelEditSave"].buildSprite(), sprites["_levelEditHitbox"].buildSprite()];
-            this._action = ["save", "hitbox"];
-            this._itemSize = 1;
-            this._wasPressed = false;
-            this._hovered = null;
-            this._clicked = true;
-            this._overbar = false;
-            this._x = null;
-            this._y = null;
-        }
-        
-        update(timeStep, gameState) {
-            this._clicked = false;
-            
-            let [cx, cy] = gameState.camera.reverseTransform(gameState.mouseLocation);
-            let [gx, gy, gw, gh] = gameState.camera.getBounds();
-            [this._x, this._y] = [gx, gy + gh];
-            
-            let overObj = Math.floor((cx - gx) / this._itemSize);
-            this._hovered = ((cy >= ((gy + gh - this._itemSize)) && (overObj < this._action.length)))? overObj: null;
-            this._overbar = this._hovered != null
-            this._clicked = this._overbar && this._wasPressed && !gameState.mousePressed;
-            
-            this._wasPressed = gameState.mousePressed;
-        }
-        
-        getOverBar() {
-            return this._overbar;
-        }
-        
-        getClicked() {
-            return (this._clicked)? this._action[this._hovered]: null; 
-        }
-        
-        draw(canvas, painter, camera) {            
-            for(let i = 0; i < this._sprites.length; i++) {
-                let [x, y, w, h] = camera.transformBox(
-                    [this._x + i * this._itemSize, this._y - this._itemSize, this._itemSize, this._itemSize]
-                );
-                
-                painter.fillStyle = "white";
-                painter.fillRect(x, y, w, h);
-                
-                this._sprites[i].draw(painter, x, y, w, h);
-                
-                if(this._hovered == i) {
-                    painter.fillStyle = "rgba(46, 187, 230, 0.5)";
-                    painter.fillRect(x, y, w, h);
-                }
-            }
-        }
-    }
-    
-    function update(timeStep, gameState) {
-        let keys = gameState.keysPressed;
-        let c = gameState.camera;
-        let [cx, cy] = c.getCenterPoint();
-        let cZoomStep = cameraScaleSpeed * timeStep;
-        
-        
-        if("Minus" in keys) gameState.camera.setMinimumBlocksShown(Math.min(cameraMaxZoomOut, gameState.camera.getMinimumBlocksShown() + cZoomStep));
-        if("Equal" in keys) gameState.camera.setMinimumBlocksShown(Math.max(cameraMaxZoomIn, gameState.camera.getMinimumBlocksShown() - cZoomStep));
-        
-        let stepAmt = cameraVelocity * timeStep * gameState.camera.getMinimumBlocksShown();
-            
-        if("ArrowUp" in keys || "KeyW" in keys) cy -= stepAmt;
-        if("ArrowDown" in keys || "KeyS" in keys) cy += stepAmt;
-        if("ArrowLeft" in keys || "KeyA" in keys) cx -= stepAmt;
-        if("ArrowRight" in keys || "KeyD" in keys) cx += stepAmt;
-        
-        c.setCenterPoint([cx, cy]);
-        c.update(level.numChunks.map((v) => v * level.chunkSize));
-        
-        gameState.__levelHoverIndicator.update(timeStep, gameState);
-        gameState.__levelSelectorBar.update(timeStep, gameState);
-        gameState.__levelActionBar.update(timeStep, gameState);
-        gameState.__levelDisplayBanner.update(timeStep);
-        
-        gameState.loadedChunks = _manageChunks(
-            level, gameState.camera, gameState.loadedChunks, 
-            gameState.blockTypes, gameState.entityTypes, 
-            gameState.sprites
-        );
-        
-        // We check if user has clicked a location with a item in the toolbar selected...
-        let [selLocX, selLocY] = gameState.__levelHoverIndicator.getBlockLocation();
-        let blockLoc = [Math.floor(selLocX), Math.floor(selLocY)];
-        let selection = gameState.__levelSelectorBar.getSelection();
-        if(
-            (!gameState.clickWasDown || (gameState.lastBlockLocation.join() != blockLoc.join())) 
-            && !gameState.__levelSelectorBar.getOverBar() && (selection != null) 
-            && (selLocX != null) && gameState.mousePressed
-            && !gameState.__levelActionBar.getOverBar()
-        ) {
-            let chunk = _findChunk(Math.floor(selLocX / level.chunkSize), Math.floor(selLocY / level.chunkSize), gameState.loadedChunks);
-            if(chunk != null) {
-                switch(selection[0]) {
-                    case "block":
-                        if(selection[1] != -1) {
-                            _addBlock(selLocX, selLocY, chunk, level.chunkSize, selection[1], gameState.sprites);
-                        }
-                        else {
-                            _deleteBlock(selLocX, selLocY, chunk, level.chunkSize);
-                        }
-                        break;
-                    case "entity":
-                        switch(selection[1]) {
-                            case -2:
-                                _deleteEntity(selLocX, selLocY, chunk, level.chunkSize);
-                                break;
-                            case -1:
-                                _setPlayer(selLocX, selLocY, gameState, gameState.playerType, gameState.sprites);
-                                break;
-                            default: 
-                                _addEntity(selLocX, selLocY, chunk, level.chunkSize, selection[1], gameState.sprites);
-                        }
-                        break;
-                }
-            }
-        }
-        
-        switch(gameState.__levelActionBar.getClicked()) {
-            case "save":
-                gameState.__levelDisplayBanner.setText("Saving Results!", Infinity);
-                _flushLoadedChunks(level, gameState.loadedChunks);
-                _saveLevel(gameState.__levelDisplayBanner, levelPath, level);
-                break;
-            case "hitbox":
-                gameState.__levelShowHitboxes = !gameState.__levelShowHitboxes;
-                gameState.__levelDisplayBanner.setText("Toggling Hitboxes " + ((gameState.__levelShowHitboxes)? "On": "Off"), 1000);
-                break;
-        }
-        
-        gameState.lastBlockLocation = blockLoc;
-        gameState.clickWasDown = gameState.mousePressed;
-    }
-    
-    function draw(canvas, painter, gameState) {    
-        // Clear the canvas...
-        painter.fillStyle = "white"
-        painter.fillRect(0, 0, canvas.width, canvas.height);
-        
-        if("preDraw" in callbacks) callbacks.preDraw(canvas, painter, gameState);
-        
-        for(let [x, y, chunk] of gameState.loadedChunks) {
-            for(let bx = 0; bx < chunk.blocks.length; bx++) {
-                let blockCol = chunk.blocks[bx];
-                
-                for(let by = 0; by < blockCol.length; by++) {
-                    let block = blockCol[by];
-                    
-                    let gx = x * level.chunkSize + bx;
-                    let gy = y * level.chunkSize + by;
-                    
-                    let [canvX, canvY, canvW, canvH] = gameState.camera.transformBox([gx, gy, 1, 1]);
-                    
-                    painter.strokeStyle = "black";
-                    painter.strokeRect(canvX, canvY, canvW, canvH);
-                    
-                    if(block != null) block.draw(canvas, painter, gameState.camera);
-                }
-            }
-            
-            for(let entity of chunk.entities) {
-                entity.draw(canvas, painter, gameState.camera);
-                
-                if(gameState.__levelShowHitboxes) {
-                    painter.strokeStyle = "red";
-                    painter.strokeRect(...gameState.camera.transformBox(entity.getHitBox()));
-                }
-            }
-        }
-        
-        if(gameState.level.player != null) {
-            gameState.level.player.draw(canvas, painter, gameState.camera);
-            
-            if(gameState.__levelShowHitboxes) {
-                painter.strokeStyle = "red";
-                painter.strokeRect(...gameState.camera.transformBox(gameState.level.player.getHitBox()));
-            }
-        }
-        
-        let [selLocX, selLocY] = gameState.__levelHoverIndicator.getBlockLocation();
-        if(
-            (selLocX != null) && !gameState.__levelSelectorBar.getOverBar() 
-            && !gameState.__levelActionBar.getOverBar() 
-            && gameState.__levelHoverIndicator.getLocation()
-        ) {
-            gameState.__levelHoverIndicator.draw(canvas, painter, gameState.camera);
-        }
-        
-        if("postDraw" in callbacks) callbacks.postDraw(canvas, painter, gameState);
-        
-        gameState.__levelSelectorBar.draw(canvas, painter, gameState.camera);
-        gameState.__levelActionBar.draw(canvas, painter, gameState.camera);
-        
-        gameState.__levelDisplayBanner.draw();
-    }
-    
-    function gameLoop(timeStep, gameState) {
-        if(gameState.__levelHoverIndicator == null) {
-            gameState.__levelHoverIndicator = new GameHoverBlock(0, 0, gameState.sprites);
-            gameState.__levelSelectorBar = new GameSelectPanel(0, 0, gameState.sprites);
-            gameState.__levelActionBar = new ActionBar(0, 0, gameState.sprites);
-            gameState.__levelDisplayBanner = new BannerDisplay(gameState);
-            gameState.level = level;
-            if(gameState.level.player != null) {
-                gameState.level.player = (gameState.playerType != null)? gameState.playerType.fromJSON(gameState.level.player, gameState.sprites): null;
-            }
-        }
-        
-        update(timeStep, gameState);
-        draw(gameState.canvas, gameState.painter, gameState);
-    }
-    
-    let gameState = {};
-    gameState.entityTypes = _gameObjListToMapping(entityTypes);
-    gameState.blockTypes = _gameObjListToMapping(blockTypes);
-    gameState.loadedChunks = [];
-    gameState.lastBlockLocation = null;
-    gameState.clickWasDown = false;
-    gameState.playerType = playerType;
-    gameState.__levelShowHitboxes = false;
-    
-    let data = {...levelData};
-    
-    let levelEditSprites = {
-        "_levelEditHover": {
-            "image": "levelEdit/hover.png",
-            "animations": {
-                "main": {
-                    "speed": 150
-                }
-            }
-        },
-        "_levelEditDelete": {
-            "image": "levelEdit/deleteSelected.png",
-        },
-        "_levelEditSave": {
-            "image": "levelEdit/save.png"
-        },
-        "_levelEditHitbox": {
-            "image": "levelEdit/hitbox.png"
-        }
-    }
-    data.sprites = (data.sprites != null)? {...data.sprites, ...levelEditSprites}: levelEditSprites;
-    
-    this.makeBaseGame(gameLoop, gameState, data);
+function _reboundEntity(entity, chunkSize, numChunks) {
+    let [cBoundX, cBoundY] = numChunks;
+    let [ex, ey, ew, eh] = entity.getHitBox();
+    [ex, ey] = [_bound(ex, 0, (cBoundX * chunkSize) - ew), _bound(ey, 0, (cBoundY * chunkSize) - eh)];
+    entity.setLocation([ex, ey]);
+    return [ex, ey];
 }
 
+function _buildChunkLookup(loadedChunks) {
+    let chunkLookup = {};
+    for(let [cx, cy, chunk] of loadedChunks) chunkLookup[[cx, cy]] = chunk;
+    
+    return chunkLookup;
+}
 
-elem_proto.makeGame = async function(levelPath, blockTypes = [], entityTypes = [], levelData = {}, playerType = null, callbacks = {}, blockSize = null, minPixelsShown = null) {    
-    let gameState = {};
-    gameState.entityTypes = _gameObjListToMapping(entityTypes);
-    gameState.blockTypes = _gameObjListToMapping(blockTypes);
+function _resetLevel(gameState) {
+    gameState.level = JSON.parse(JSON.stringify(gameState.__origLevel));
+    
+    let lvl = gameState.level;
+    gameState.__player = gameState.playerType.fromJSON(lvl.players, gameState.assets);
+    gameState.camera.setTrackedObject(gameState.__player);
+    
     gameState.loadedChunks = [];
-    gameState.playerType = playerType;
-    gameState.__player = null;
-    
-    levelData.level = levelPath;
-    
-    function _reboundEntity(entity, chunkSize, numChunks) {
-        let [cBoundX, cBoundY] = numChunks;
-        let [ex, ey, ew, eh] = entity.getHitBox();
-        [ex, ey] = [_bound(ex, 0, (cBoundX * chunkSize) - ew), _bound(ey, 0, (cBoundY * chunkSize) - eh)];
-        entity.setLocation([ex, ey]);
-        return [ex, ey];
-    }
-    
-    function _buildChunkLookup(loadedChunks) {
-        let chunkLookup = {};
-        for(let [cx, cy, chunk] of loadedChunks) chunkLookup[[cx, cy]] = chunk;
-        
-        return chunkLookup;
-    }
-    
-    function _resetLevel(gameState) {
-        gameState.level = JSON.parse(JSON.stringify(gameState.__origLevel));
-        
-        let lvl = gameState.level;
-        gameState.__player = gameState.playerType.fromJSON(lvl.player, gameState.sprites);
-        gameState.camera.setTrackedObject(gameState.__player);
-        
-        gameState.loadedChunks = [];
-        gameState.chunkLookup = {};
-    }
-    
-    function _handleCollisions(loadedChunks, chunkLookup, chunkSize, numChunks, player, gameState) {
-        // Bound value, then compute floored division and modulo...
-        let boundNFloor = (x, xlow, xhigh, bounding_func = Math.floor) => {
-            x = _bound(x, xlow, xhigh);
-            return bounding_func(x);
-        }
-        
-        let divmod = (x, y) => [Math.floor(x / y), Math.floor(x % y)];
-                
-        // Going over every entity in every loaded chunk...
-        for(let ci = 0; ci < loadedChunks.length; ci++) {
-            let [cx, cy, chunk] = loadedChunks[ci];
-            
-            for(let i = ((ci == 0)? -1: 0); i < chunk.entities.length; i++) {
-                // -1 indicates index of the player...
-                let entity1 = (i < 0)? player: chunk.entities[i];
-                
-                if(!("__getFullCollisionBox" in entity1)) continue;
-                
-                let [x1, y1, w1, h1] = entity1.__getFullCollisionBox();
-                
-                // Handle any entity-block collisions....
-                let xbs = boundNFloor(x1, 0, (chunkSize * numChunks[0]) - 1);
-                let ybs = boundNFloor(y1, 0, (chunkSize * numChunks[1]) - 1);
-                let xbe = boundNFloor(x1 + w1, 0, (chunkSize * numChunks[0]) - 1);
-                let ybe = boundNFloor(y1 + h1, 0, (chunkSize * numChunks[1]) - 1);
-                        
-                for(let fbx = xbs; fbx <= xbe; fbx++) {
-                    for(let fby = ybs; fby <= ybe; fby++) {
-                        // Compute chunk and block in chunk indexes...
-                        let [cxb, bx] = divmod(fbx, chunkSize);
-                        let [cyb, by] = divmod(fby, chunkSize);
-                        
-                        // If chunk is not loaded, just skip it...
-                        if(!([cxb, cyb] in chunkLookup)) continue;
-                        
-                        let block = chunkLookup[[cxb, cyb]].blocks[bx][by]
-                        
-                        if((block != null) && ("__getFullCollisionBox" in block)) {
-                            // If block is not null, perform collision check with entity...
-                            let [x2, y2, w2, h2] = block.__getFullCollisionBox();
-                            
-                            if(
-                                !((x2 >= (x1 + w1)) || ((x2 + w2) <= x1)) // If we collide on x-values
-                                && !((y2 >= (y1 + h1)) || ((y2 + h2) <= y1)) // and y values... (boxes overlap).
-                            ) {
-                                if("onCollision" in entity1) {
-                                    if(entity1.onCollision(block) && (i >= 0)) {
-                                        if(i >= 0) {
-                                            _popAndSwapWithEnd(chunk.entities, i);
-                                        }
-                                        else {
-                                            _resetLevel(gameState);
-                                            return;
-                                        }
-                                    }
-                                }
-                                if("onCollision" in block) {
-                                    if(block.onCollision(entity1)) {
-                                        chunkLookup[[cxb, cyb]].blocks[bx][by] = null;
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
+    gameState.chunkLookup = {};
+}
 
-                // Now handle any entity-entity collisions...
-                for(let cj = ci; cj < loadedChunks.length; cj++) {
-                    let [cx2, cy2, chunk2] = loadedChunks[cj]
+/*
+ * COLLISION MANAGEMENT FUNCTIONS... 
+ */
+function _handleCollisions(loadedChunks, chunkLookup, chunkSize, numChunks, players, gameState) {
+    // Bound value, then compute floored division and modulo...
+    let boundNFloor = (x, xlow, xhigh, bounding_func = Math.floor) => {
+        x = _bound(x, xlow, xhigh);
+        return bounding_func(x);
+    }
+    
+    let divmod = (x, y) => [Math.floor(x / y), Math.floor(x % y)];
+            
+    // Going over every entity in every loaded chunk...
+    for(let ci = 0; ci < loadedChunks.length; ci++) {
+        let [cx, cy, chunk] = loadedChunks[ci];
+        
+        for(let i = ((ci == 0)? -players.length: 0); i < chunk.entities.length; i++) {
+            // -1 indicates index of the player...
+            let entity1 = (i < 0)? players[players.length + i]: chunk.entities[i];
+            
+            if(!("__getFullCollisionBox" in entity1)) continue;
+            
+            let [x1, y1, w1, h1] = entity1.__getFullCollisionBox();
+            
+            // Handle any entity-block collisions....
+            let xbs = boundNFloor(x1, 0, (chunkSize * numChunks[0]) - 1);
+            let ybs = boundNFloor(y1, 0, (chunkSize * numChunks[1]) - 1);
+            let xbe = boundNFloor(x1 + w1, 0, (chunkSize * numChunks[0]) - 1);
+            let ybe = boundNFloor(y1 + h1, 0, (chunkSize * numChunks[1]) - 1);
                     
-                    for(let j = ((ci == cj)? i + 1: 0); j < chunk2.entities.length; j++) {
-                        let entity2 = chunk2.entities[j];
+            for(let fbx = xbs; fbx <= xbe; fbx++) {
+                for(let fby = ybs; fby <= ybe; fby++) {
+                    // Compute chunk and block in chunk indexes...
+                    let [cxb, bx] = divmod(fbx, chunkSize);
+                    let [cyb, by] = divmod(fby, chunkSize);
+                    
+                    // If chunk is not loaded, just skip it...
+                    if(!([cxb, cyb] in chunkLookup)) continue;
+                    
+                    let block = chunkLookup[[cxb, cyb]].blocks[bx][by]
+                    
+                    if((block != null) && ("__getFullCollisionBox" in block)) {
+                        // If block is not null, perform collision check with entity...
+                        let [x2, y2, w2, h2] = block.__getFullCollisionBox();
                         
-                        if(!("__getFullCollisionBox" in entity2)) continue;
-                        let [x2, y2, w2, h2] = entity2.__getFullCollisionBox();
-                        
-                        // Collision checks....
                         if(
                             !((x2 >= (x1 + w1)) || ((x2 + w2) <= x1)) // If we collide on x-values
                             && !((y2 >= (y1 + h1)) || ((y2 + h2) <= y1)) // and y values... (boxes overlap).
-                        ) {                            
-                            if("onCollision" in entity1) {
-                                if(entity1.onCollision(entity2)) {
-                                    if(i >= 0) {
-                                        _popAndSwapWithEnd(chunk.entities, i);
-                                    }
-                                    else {
-                                        _resetLevel(gameState);
-                                        return;
-                                    }
-                                }
-                            }
-                            if("onCollision" in entity2) {
-                                if(entity2.onCollision(entity1)) {
-                                    _popAndSwapWithEnd(chunk2.entities, j);
-                                }
-                            }
+                        ) {
+                            if("onCollision" in entity1) entity1.onCollision(block);
+                            if("onCollision" in block) block.onCollision(entity1);
                         }
                     }
                 }
             }
-        }
-        
-        for(let [cx, cy, chunk] of loadedChunks) {
-            for(let blockCol of chunk.blocks) {
-                for(let block of blockCol) {
-                    if((block != null) && ("onCollisionEnd" in block)) block.onCollisionEnd();
+
+            // Now handle any entity-entity collisions...
+            for(let cj = ci; cj < loadedChunks.length; cj++) {
+                let [cx2, cy2, chunk2] = loadedChunks[cj]
+                
+                for(let j = ((ci == cj)? i + 1: 0); j < chunk2.entities.length; j++) {
+                    let entity2 = (j < 0)? players[players.length + j]: chunk2.entities[j];
+                    
+                    if(!("__getFullCollisionBox" in entity2)) continue;
+                    let [x2, y2, w2, h2] = entity2.__getFullCollisionBox();
+                    
+                    // Collision checks....
+                    if(
+                        !((x2 >= (x1 + w1)) || ((x2 + w2) <= x1)) // If we collide on x-values
+                        && !((y2 >= (y1 + h1)) || ((y2 + h2) <= y1)) // and y values... (boxes overlap).
+                    ) {                            
+                        if("onCollision" in entity1) entity1.onCollision(entity2);
+                        if("onCollision" in entity2) entity2.onCollision(entity1)
+                    }
                 }
             }
-            for(let entity of chunk.entities) {
-                if("onCollisionEnd" in entity) entity.onCollisionEnd();
+        }
+    }
+    
+    for(let [cx, cy, chunk] of loadedChunks) {
+        for(let blockCol of chunk.blocks) {
+            for(let block of blockCol) {
+                if((block != null) && ("onCollisionEnd" in block)) block.onCollisionEnd();
             }
         }
-        
+        for(let entity of chunk.entities) {
+            if("onCollisionEnd" in entity) entity.onCollisionEnd();
+        }
+    }
+    
+    for(let player of players) {
         if("onCollisionEnd" in player) player.onCollisionEnd();
     }
+}
+
+
+function _buildCamerasFrom(canvas, cameraConfig, players) {
+    let cameraObjs = [];
     
-    function gameLoop(timeStep, gameState) {
-        // Setup player object if we just started the game...
-        if(gameState.__player == null) {
-            let lvl = gameState.level;
-            gameState.__origLevel = JSON.parse(JSON.stringify(lvl));
-            gameState.__player = gameState.playerType.fromJSON(lvl.player, gameState.sprites);
-            gameState.camera.setTrackedObject(gameState.__player);
-            gameState.chunkLookup = {};
-            
-            // Some methods to allow entities/blocks to add other entities/blocks to the game...
-            gameState.addEntity = function(entity) {
-                let [ex, ey] = _reboundEntity(entity, this.level.chunkSize, this.level.numChunks);
-                [ex, ey] = [Math.floor(ex / this.level.chunkSize), Math.floor(ey / this.level.chunkSize)];
-                
-                if([ex, ey] in this.chunkLookup) {
-                    this.chunkLookup[[ex, ey]].entities.push(entity);
-                    return;
-                }
-                
-                this.level.chunks[ex][ey].entities.push(entity.toJSON());
-            };
-            
-            gameState.addBlock = function(block) {
-                let [bx, by] = _reboundEntity(block, this.level.chunkSize, this.level.numChunks);
-                let [cx, cy] = [Math.floor(bx / this.level.chunkSize), Math.floor(by / this.level.chunkSize)];
-                [bx, by] = [Math.floor(bx), Math.floor(by)];
-                
-                block.x = Math.floor(bx);
-                block.y = Math.floor(by);
-                let subBX = bx % this.level.chunkSize;
-                let subBY = by % this.level.chunkSize;
-                
-                if([cx, cy] in this.chunkLookup) {
-                    this.chunkLookup[[cx, cy]].blocks[subBX][subBY] = block;
-                    return;
-                }
-                
-                this.level.chunks[cx][cy].blocks[subBX][subBY] = block.toJSON();
-            };
-            
-            gameState.getPlayer = function() {
-                return gameState.__player;
-            };
-            
-            gameState.getNeighboringBlocks = function(block) {
-                let [bx, by] = _reboundEntity(block, this.level.chunkSize, this.level.numChunks).map(Math.floor);
-                
-                let neighbors = [
-                    [null, null, null],
-                    [null, null, null],
-                    [null, null, null]
-                ];
-                
-                let iStart = bx - 1;
-                let jStart = by - 1;
-                
-                for(let i = iStart; i < bx + 2; i++) {
-                    for(let j = jStart; j < by + 2; j++) {
-                        let [cx, cy] = [i / this.level.chunkSize, j / this.level.chunkSize].map(Math.floor); 
-                        
-                        let subBX = i % this.level.chunkSize;
-                        let subBY = j % this.level.chunkSize;
-                        
-                        if([cx, cy] in this.chunkLookup) {
-                            neighbors[i - iStart][j - jStart] = this.chunkLookup[[cx, cy]].blocks[subBX][subBY];
-                        }
-                    }
-                }
-                
-                return neighbors;
-            };
-            
-            gameState.getBlocksAround = function(x, y) {
-                let dummyObj = new GameObject(x, y, null);
-                return gameState.getNeighboringBlocks(dummyObj);
-            }
-            
-            gameState.getEntities = function() {
-                let entityLst = [];
-                
-                for(let [cx, cy, chunk] of this.loadedChunks) {
-                    entityLst.push(...chunk.entities);
-                }
-                
-                return entityLst;
-            };
-        }
-        
-        update(timeStep, gameState);
-        draw(gameState.canvas, gameState.painter, gameState);
+    if(cameraConfig == null) {
+        cameraConfig = [{}];
     }
     
-    function update(timeStep, gameState) {
-        if("preUpdate" in callbacks) {
-            if(callbacks.preUpdate(timeStep, gameState)) return;
+    for(let camera of cameraConfig) {
+        let {
+            blockSize = 32,
+            minBlocksShown = 10,
+            maxBlocksShown = 16,
+            maxZoomAdjustment = 0.5,
+            trackBox = [1/3, 1/3, 1/3, 1/3],
+            subCanvasBox = [0, 0, 1, 1],
+            tracks = range(players.length)
+        } = camera;
+        
+        let cameraObj = new Camera(canvas, blockSize, minBlocksShown, maxBlocksShown, maxZoomAdjustment, trackBox, subCanvasBox);
+        let trackPlayers = [];
+        
+        for(let idx in tracks) {
+            trackPlayers.push(players[idx]);
         }
+        
+        cameraObj.setTracks(trackPlayers);
+        
+        cameraObjs.push(cameraObj);
+    }
+    
+    return cameraObjs;
+}
 
+/*
+gameData {
+    assets: {
+        sprites: ...
+        sounds: ...
+    }
+    objects: {
+        blocks: [BlockClass1, ...],
+        entities: [EntityClass1, ...],
+        players: [PlayerClass1, ...]
+    }
+    zones: {
+        "zoneName": {
+            zoneData: "path/to/level/data"
+            preDraw: function...,
+            postDraw: ...,
+            preUpdate: ...,
+            postUpdate: ...,
+            initialGameState: {
+        
+            }
+        }
+    }
+}
+*/
+
+class Zone {
+    constructor(zoneInfo, cameraConfig) {
+        let {
+            zoneData,
+            preUpdate = null,
+            postUpdate = null,
+            preDraw = null,
+            postDraw = null,
+            initGameState = {}
+        } = zoneInfo;
+        this.zoneData = zoneData;
+        this.preUpdate = preUpdate;
+        this.postUpdate = postUpdate;
+        this.preDraw = preDraw;
+        this.postDraw = postDraw;
+        this.cameraConfig = cameraConfig;
+        this._initGameState = initGameState;
+    }
+    
+    initialized(gameState) {
+        return gameState.cameras != null;
+    }
+    
+    initGameState(gameState) {
+        if(gameState.cameras == null) {
+            gameState.__players = [];
+            gameState.loadedChunks = [];
+            
+            for(let player of this.zoneData.players) {
+                let playerType = gameState.playerTypes[player._$type];
+                gameState.__players.push(playerType.fromJSON(player, gameState.assets));
+            }
+            
+            gameState.cameras = _buildCamerasFrom(gameState.canvas, this.cameraConfig, gameState.__players);
+            
+            if(this._initGameState != null) Object.assign(gameState, this._initGameState);
+        }
+    }
+    
+    update(timeStep, gameState) {
+        if(this.preUpdate != null) if(this.preUpdate(timeStep, gameState)) return;
+        
         // Used heavily below...
-        let chunkSize = gameState.level.chunkSize;
-        let numChunks = gameState.level.numChunks;
+        let chunkSize = this.zoneData.chunkSize;
+        let numChunks = this.zoneData.numChunks;
         
         let relocate = {};
         
@@ -1890,61 +1477,829 @@ elem_proto.makeGame = async function(levelPath, blockTypes = [], entityTypes = [
         }
         
         // Unload any remaining entities into the level as their chunks aren't loaded...
-        for(let [ex, ey] in relocate) {
-            for(let entity in relocate[[ex, ey]]) {
-                gameState.level.chunks[ex][ey].entities.push(entity.toJSON());
+        for(let loc in relocate) {
+            let [ex, ey] = loc.split(",").map((val) => +val);
+            for(let entity of relocate[loc]) {
+                this.zoneData.chunks[ex][ey].entities.push(entity.toJSON());
             }
         }
         
         // Update the player... Bound player to game zone...
-        if(gameState.__player.update(timeStep, gameState)) {
-            _resetLevel(gameState);
-            return;
-        };
-        _reboundEntity(gameState.__player, chunkSize, numChunks);
+        for(let player of gameState.__players) {
+            if(player.update(timeStep, gameState)) throw "Not implemented";
+            _reboundEntity(player, chunkSize, numChunks);
+        }
         
         // Handle collisions between objects.... (Expensive...)
-        _handleCollisions(gameState.loadedChunks, gameState.chunkLookup, chunkSize, numChunks, gameState.__player, gameState);
+        _handleCollisions(gameState.loadedChunks, gameState.chunkLookup, chunkSize, numChunks, gameState.__players, gameState);
         
-        // Finally, update the camera...
-        gameState.camera.update(gameState.level.numChunks.map((v) => v * gameState.level.chunkSize));
+        // Finally, update the cameras...
+        for(let camera of gameState.cameras) {
+            camera.update(this.zoneData.numChunks.map((v) => v * this.zoneData.chunkSize));
+        }
         
         // Update chunks...
         gameState.loadedChunks = _manageChunks(
-            gameState.level, gameState.camera, gameState.loadedChunks, 
-            gameState.blockTypes, gameState.entityTypes, gameState.sprites
+            this.zoneData, gameState.cameras, gameState.loadedChunks, 
+            gameState.blockTypes, gameState.entityTypes, gameState.assets
         );
         gameState.chunkLookup = _buildChunkLookup(gameState.loadedChunks);
         
-        if("postUpdate" in callbacks) callbacks.postUpdate(timeStep, gameState);
+        if(this.postUpdate != null) this.postUpdate(timeStep, gameState);
     }
     
-    function draw(canvas, painter, gameState) {
+    draw(canvas, painter, gameState) {
         // Clear the canvas...
         painter.fillStyle = "white"
         painter.fillRect(0, 0, canvas.width, canvas.height);
         
-        if("preDraw" in callbacks) {
-            if(callbacks.preDraw(canvas, painter, gameState)) return;
-        }
+        if(this.preDraw != null) if(this.preDraw(gameState.canvas, gameState.painter, gameState)) return;
         
-        // Draw all entities/blocks...
+        // Add everything to zorder list...
+        let drawObjects = [];
+        
         for(let [cx, cy, chunk] of gameState.loadedChunks) {
             for(let blockCol of chunk.blocks) {
                 for(let block of blockCol) {
-                    if(block != null) block.draw(gameState.canvas, gameState.painter, gameState.camera);
+                    if(block != null) drawObjects.push(block);
+                }
+            }
+        }
+        
+        for(let [cx, cy, chunk] of gameState.loadedChunks) {
+            for(let entity of chunk.entities) {
+                drawObjects.push(entity);
+            }
+        }
+        
+        // Draw the player...
+        for(let player of gameState.__players) drawObjects.push(player);
+        
+        drawObjects.sort((a, b) => a.getZOrder() - b.getZOrder());
+        
+        for(let camera of gameState.cameras) {
+            let [x, y, w, h] = camera.getDisplayZone();
+            let clipBox = new Path2D();
+            clipBox.rect(x, y, w, h);
+            
+            gameState.painter.save();
+            gameState.painter.clip(clipBox, "evenodd");
+            
+            for(let object of drawObjects) {
+                object.draw(gameState.canvas, gameState.painter, camera);
+            }
+            
+            gameState.painter.restore();
+        }
+        
+        if(this.postDraw != null) this.postDraw(gameState.canvas, gameState.painter, gameState);
+    }
+}
+
+async function getZoneBuilder(zoneInfo) {
+    if(zoneInfo.zoneData == null) {
+        throw "Zone does not have a 'zoneData' attribute";
+    }
+    
+    return {
+        origPath: zoneInfo.zoneData,
+        _zoneData: await loadJSON(zoneInfo.zoneData),
+        _zoneInfo: zoneInfo,
+        buildZone: function(cameraInfo) {
+            this._zoneInfo.zoneData = JSON.parse(JSON.stringify(this._zoneData));
+            return new Zone(this._zoneInfo, cameraInfo);
+        }
+    }
+}
+
+window.Zone = Zone;
+
+
+elem_proto.levelEditor = async function(gameInfo, editZone) {    
+    function _levelGen(zoneName, zoneInfo) {
+        let width = Math.floor(_bound(prompt("Width in Chunks: ", 10), 1, 20));
+        let height = Math.floor(_bound(prompt("Height in Chunks: ", 10), 1, 20));
+        let chunkSize = Math.floor(_bound(prompt("Chunk Size (in blocks):", 16), 10, 30));
+                
+        return {
+            origPath: zoneInfo.zoneData,
+            _zoneData: _makeEmptyLevel(width, height, chunkSize),
+            _zoneInfo: zoneInfo,
+            buildZone: function(cameraInfo) {
+                this._zoneInfo.zoneData = JSON.parse(JSON.stringify(this._zoneData));
+                return new Zone(this._zoneInfo, cameraInfo);
+            }
+        }
+    }
+    
+    let cameraVelocity = 1 / 1000; // In blocks per millisecond...
+    let cameraMaxZoomIn = 5;
+    let cameraMaxZoomOut = 40;
+    let cameraScaleSpeed = 0.02; // In pixels per millisecond...
+    
+    async function _saveLevel(banner, filename, levelData) {
+        try {
+            let result = await runPython(_saveLevelCode(filename, JSON.stringify(levelData, null, 4)));
+            banner.setText("Saved Successfully.", 1500);
+        } catch(exp) {
+            banner.setText(exp, 3000);
+        }
+    }
+    
+    function _deleteBlock(blockX, blockY, loadedChunk, chunkSize) {
+        blockX = Math.floor(blockX % chunkSize);
+        blockY = Math.floor(blockY % chunkSize);
+        
+        loadedChunk.blocks[blockX][blockY] = null;
+    }
+    
+    function _addBlock(blockX, blockY, loadedChunk, chunkSize, blockClass, assets) {
+        let cBlockX = Math.floor(blockX % chunkSize);
+        let cBlockY = Math.floor(blockY % chunkSize);
+                                
+        loadedChunk.blocks[cBlockX][cBlockY] = new blockClass(Math.floor(blockX), Math.floor(blockY), assets);
+    }
+    
+    function _deleteEntity(blockX, blockY, loadedChunk, chunkSize) {
+        for(let i = 0; i < loadedChunk.entities.length; i++) {
+            let entity = loadedChunk.entities[i];
+            
+            let [x, y, w, h] = entity.getHitBox();
+            if((blockX > x) && (blockY > y) && (blockX < x + w) && (blockY < y + h)) {
+                _popAndSwapWithEnd(loadedChunk.entities, i);
+                return true;
+            }
+        }
+        
+        return false;
+    }
+    
+    function _addEntity(blockX, blockY, loadedChunk, chunkSize, entityClass, assets) {
+        loadedChunk.entities.push(new entityClass(blockX, blockY, assets));
+    }
+    
+    function _addPlayer(blockX, blockY, gameState, playerType, assets) {
+        if(playerType != null) {
+            gameState.zone.zoneData.players.push(new playerType(blockX, blockY, assets));
+        }
+    }
+    
+    function _deletePlayer(blockX, blockY, gameState) {
+        for(let i = 0; i < gameState.zone.zoneData.players.length; i++) {
+            let [x, y, w, h] = gameState.zone.zoneData.players[i].getHitBox();
+            
+            if((blockX > x) && (blockY > y) && (blockX < x + w) && (blockY < y + h)) {
+                _popAndSwapWithEnd(gameState.zone.zoneData.players, i);
+                return true;
+            }
+        }
+        
+        return false;
+    }
+    
+    class BannerDisplay {
+        constructor(gameState) {
+            this._g = gameState;
+            this._text = "";
+            this._timeLeft = 0;
+            this._style = null;
+            this._color = null;
+        }
+        
+        setText(text = "", time = 3000, color = "black", style = "30px Arial") {
+            this._text = text;
+            this._timeLeft = time;
+            this._style = style;
+            this._color = color;
+        }
+        
+        update(timeStep) {
+            this._timeLeft = Math.max(0, this._timeLeft - timeStep);
+        }
+        
+        draw() {
+            if(this._timeLeft > 0) {
+                let {width, height} = this._g.canvas;
+                
+                this._g.painter.fillStyle = this._color;
+                this._g.painter.font = this._style;
+                this._g.painter.textAlign = "center";
+                
+                this._g.painter.fillText(this._text, width / 2, height / 2);
+            }
+        }
+    }
+    
+    class GameHoverBlock extends GameObject {
+        constructor(x, y, assets) {
+            super(x, y, assets);
+            this._sprite = assets.sprites["_levelEditHover"].buildSprite();
+            this._sprite.setAnimation("main");
+            this._numChunks = null;
+            this._chunkSize = null;
+        }
+        
+        update(timeStep, gameState) {
+            if(this._numChunks == null) {
+                this._numChunks = gameState.zone.zoneData.numChunks;
+                this._chunkSize = gameState.zone.zoneData.chunkSize;
+            }
+            
+            [this.x, this.y] = gameState.cameras[0].reverseTransform(gameState.mouse.location);
+
+            this._sprite.update(timeStep);
+        }
+        
+        getBlockLocation() {
+            let [x, y] = [this.x, this.y];
+            
+            if((x < 0) || (x >= this._numChunks[0] * this._chunkSize)) return [null, null];
+            if((y < 0) || (y >= this._numChunks[1] * this._chunkSize)) return [null, null];
+            
+            return [x, y];
+        }
+        
+        draw(canvas, painter, camera) {
+            let [x, y, w, h] = camera.transformBox([Math.floor(this.x), Math.floor(this.y), 1, 1]);
+            this._sprite.draw(painter, x, y, w, h);
+        }
+    }
+    
+    class GameSelectPanel extends GameObject {
+        constructor(x, y, assets) {
+            super(x, y, assets);
+            this._deleteSprite = assets.sprites["_levelEditDelete"].buildSprite();
+            this._itemSize = 1;
+            this._hovered = null;
+            this._selected = null;
+            this._blocks = null;
+            this._entities = null;
+            this._assets = assets;
+            this._width = 0;
+            this._overbar = false;
+            this._playerType = null;
+        }
+        
+        _grabSelection(tileX, tileY, entityLen, blockLen, playerLen) {
+            switch(tileY) {
+                case 0:
+                    if((tileX >= 0) && (tileX < entityLen + playerLen + 1)) {
+                        if(tileX < (playerLen + 1)) {
+                            return ["player", tileX - 1];
+                        }
+                        else {
+                            return ["entity", tileX - (playerLen + 1)];
+                        }
+                    }
+                    return null;
+                case 1:
+                    return ((tileX >= 0) && (tileX < blockLen + 1))? ["block", tileX - 1]: null;
+            }
+            
+            return null;
+        }
+        
+        _getDrawLocation(selection) {
+            let info;
+            
+            switch(selection[0]) {
+                case "block":
+                    info = [1, 1];
+                    break;
+                case "entity":
+                    info = [this._players.length + 1, 0];
+                    break;
+                case "player":
+                    info = [1, 0];
+                    break;
+            }
+            
+            return info;
+        }
+        
+        update(timeStep, gameState) {            
+            if(this._blocks == null) {
+                this._blocks = _gameObjMappingToList(gameState.blockTypes);
+                this._entities = _gameObjMappingToList(gameState.entityTypes);
+                this._players = _gameObjMappingToList(gameState.playerTypes);
+                
+                this._lookupObj = {
+                    "entity": this._entities,
+                    "block": this._blocks,
+                    "player": this._players
                 }
             }
             
-            for(let entity of chunk.entities) {
-                entity.draw(gameState.canvas, gameState.painter, gameState.camera);
+            let [x, y, w, h] = gameState.cameras[0].getBounds();
+            
+            [this._x, this._y] = [x, y];
+            this._width = w;
+            
+            this._itemSize = Math.min(w / (this._blocks.length + 1), 1, w / (this._entities.length + 2));
+            
+            let [mx, my] = gameState.cameras[0].reverseTransform(gameState.mouse.location);
+            let [tileX, tileY] = [Math.floor((mx - x) / this._itemSize), Math.floor((my - y) / this._itemSize)];
+            
+            this._overbar = tileY < 2 && tileY >= 0;
+            this._hovered = this._grabSelection(tileX, tileY, this._entities.length, this._blocks.length, this._players.length);
+
+            if(gameState.mouse.pressed && this._hovered != null) {
+                this._selected = this._hovered;
+            }
+
+            this._deleteSprite.update(timeStep);
+        }
+        
+        getOverBar() {
+            return this._overbar;
+        }
+        
+        getSelection() {
+            return (this._selected != null)? [this._selected[0], (this._selected[1] >= 0)? this._lookupObj[this._selected[0]][this._selected[1]]: this._selected[1]]: null;
+        }
+        
+        draw(canvas, painter, camera) {            
+            painter.fillStyle = "#dbdbdb";
+            let [x, y, width, height] = camera.transformBox([this._x, this._y, this._width, this._itemSize * 2]);
+            let step = height / 2;
+            
+            painter.fillRect(x, y, width, height);
+            
+            this._deleteSprite.draw(painter, x, y, step, step);
+            for(let i = 0; i < this._players.length; i++) {
+                (new this._players[i](x + step * (i + 1), y, this._assets)).drawPreview(canvas, painter, [x + step * (i + 1), y, step, step]);
+            }
+            this._deleteSprite.draw(painter, x, y + step, step, step);
+            for(let i = 0; i < this._entities.length; i++) {
+                (new this._entities[i](x + step * (i + this._players.length + 1), y, this._assets)).drawPreview(
+                    canvas, painter, [x + step * (i + this._players.length + 1), y, step, step]
+                );
+            }
+            for(let i = 0; i < this._blocks.length; i++) {
+                (new this._blocks[i](x + step * (i + 1), y + step, this._assets)).drawPreview(
+                    canvas, painter, [x + step * (i + 1), y + step, step, step]
+                );
+            }
+            
+            // Hover object....
+            if(this._hovered != null) {
+                painter.fillStyle = "rgba(46, 187, 230, 0.5)";
+
+                let [idxOff, yOff] = this._getDrawLocation(this._hovered);
+                painter.fillRect(x + (this._hovered[1] + idxOff) * step, y + yOff * step, step, step);
+            }
+            
+            // Selected Object...
+            if(this._selected != null) {
+                painter.fillStyle = "rgba(27, 145, 181, 0.7)";
+                let [idxOff, yOff] = this._getDrawLocation(this._selected);
+                painter.fillRect(x + (this._selected[1] + idxOff) * step, y + yOff * step, step, step);
             }
         }
-        // Draw the player...
-        gameState.__player.draw(gameState.canvas, gameState.painter, gameState.camera);
-        
-        if("postDraw" in callbacks) callbacks.postDraw(canvas, painter, gameState);
     }
     
-    this.makeBaseGame(gameLoop, gameState, levelData, blockSize ?? 32, minPixelsShown ?? (10 * 32));
+    class ActionBar extends GameObject {
+        constructor(x, y, assets) {
+            super(x, y, assets);
+            this._sprites = [assets.sprites["_levelEditSave"].buildSprite(), assets.sprites["_levelEditHitbox"].buildSprite()];
+            this._action = ["save", "hitbox"];
+            this._itemSize = 1;
+            this._wasPressed = false;
+            this._hovered = null;
+            this._clicked = true;
+            this._overbar = false;
+            this._x = null;
+            this._y = null;
+        }
+        
+        update(timeStep, gameState) {
+            this._clicked = false;
+            
+            let [cx, cy] = gameState.cameras[0].reverseTransform(gameState.mouse.location);
+            let [gx, gy, gw, gh] = gameState.cameras[0].getBounds();
+            [this._x, this._y] = [gx, gy + gh];
+            
+            let overObj = Math.floor((cx - gx) / this._itemSize);
+            this._hovered = ((cy >= ((gy + gh - this._itemSize)) && (overObj < this._action.length)))? overObj: null;
+            this._overbar = this._hovered != null
+            this._clicked = this._overbar && this._wasPressed && !gameState.mouse.pressed;
+            
+            this._wasPressed = gameState.mouse.pressed;
+        }
+        
+        getOverBar() {
+            return this._overbar;
+        }
+        
+        getClicked() {
+            return (this._clicked)? this._action[this._hovered]: null; 
+        }
+        
+        draw(canvas, painter, camera) {            
+            for(let i = 0; i < this._sprites.length; i++) {
+                let [x, y, w, h] = camera.transformBox(
+                    [this._x + i * this._itemSize, this._y - this._itemSize, this._itemSize, this._itemSize]
+                );
+                
+                painter.fillStyle = "white";
+                painter.fillRect(x, y, w, h);
+                
+                this._sprites[i].draw(painter, x, y, w, h);
+                
+                if(this._hovered == i) {
+                    painter.fillStyle = "rgba(46, 187, 230, 0.5)";
+                    painter.fillRect(x, y, w, h);
+                }
+            }
+        }
+    }
+    
+    function update(timeStep, gameState) {
+        let keys = gameState.keysPressed;
+        let [cx, cy] = gameState.cameras[0].getCenterPoint();
+        let cZoomStep = cameraScaleSpeed * timeStep;
+        
+        if("Minus" in keys) {
+            gameState.cameras[0].setMinimumBlocksShown(Math.min(cameraMaxZoomOut, gameState.cameras[0].getMinimumBlocksShown() + cZoomStep));
+            gameState.cameras[0].setMaximumBlocksShown(gameState.cameras[0].getMinimumBlocksShown() * 1.6);
+        }
+        if("Equal" in keys) { 
+            gameState.cameras[0].setMinimumBlocksShown(Math.max(cameraMaxZoomIn, gameState.cameras[0].getMinimumBlocksShown() - cZoomStep));
+            gameState.cameras[0].setMaximumBlocksShown(gameState.cameras[0].getMinimumBlocksShown() * 1.6);
+        }
+        
+        let stepAmt = cameraVelocity * timeStep * gameState.cameras[0].getMinimumBlocksShown();
+            
+        if("ArrowUp" in keys || "KeyW" in keys) cy -= stepAmt;
+        if("ArrowDown" in keys || "KeyS" in keys) cy += stepAmt;
+        if("ArrowLeft" in keys || "KeyA" in keys) cx -= stepAmt;
+        if("ArrowRight" in keys || "KeyD" in keys) cx += stepAmt;
+        
+        gameState.cameras[0].setCenterPoint([cx, cy]);
+        gameState.cameras[0].update(gameState.zone.zoneData.numChunks.map((v) => v * gameState.zone.zoneData.chunkSize));
+        
+        gameState.__levelHoverIndicator.update(timeStep, gameState);
+        gameState.__levelSelectorBar.update(timeStep, gameState);
+        gameState.__levelActionBar.update(timeStep, gameState);
+        gameState.__levelDisplayBanner.update(timeStep);
+        
+        gameState.loadedChunks = _manageChunks(
+            gameState.zone.zoneData, gameState.cameras, gameState.loadedChunks, 
+            gameState.blockTypes, gameState.entityTypes, 
+            gameState.assets
+        );
+        
+        // We check if user has clicked a location with a item in the toolbar selected...
+        let [selLocX, selLocY] = gameState.__levelHoverIndicator.getBlockLocation();
+        let blockLoc = [Math.floor(selLocX), Math.floor(selLocY)];
+        let selection = gameState.__levelSelectorBar.getSelection();
+        if(
+            (!gameState.clickWasDown || (gameState.lastBlockLocation.join() != blockLoc.join())) 
+            && !gameState.__levelSelectorBar.getOverBar() && (selection != null) 
+            && (selLocX != null) && gameState.mouse.pressed
+            && !gameState.__levelActionBar.getOverBar()
+        ) {
+            let level = gameState.zone.zoneData;
+            let chunk = _findChunk(Math.floor(selLocX / level.chunkSize), Math.floor(selLocY / level.chunkSize), gameState.loadedChunks);
+            if(chunk != null) {
+                switch(selection[0]) {
+                    case "block":
+                        if(selection[1] != -1) {
+                            _addBlock(selLocX, selLocY, chunk, level.chunkSize, selection[1], gameState.assets);
+                        }
+                        else {
+                            _deleteBlock(selLocX, selLocY, chunk, level.chunkSize);
+                        }
+                        break;
+                    case "entity":
+                        _addEntity(selLocX, selLocY, chunk, level.chunkSize, selection[1], gameState.assets);
+                        break;
+                    case "player":
+                        switch(selection[1]) {
+                            case -1:
+                                if(!_deleteEntity(selLocX, selLocY, chunk, level.chunkSize)) _deletePlayer(selLocX, selLocY, gameState);
+                                break;
+                            default:
+                                _addPlayer(selLocX, selLocY, gameState, selection[1], gameState.assets);
+                                break;
+                        }
+                        break;
+                }
+            }
+        }
+        
+        switch(gameState.__levelActionBar.getClicked()) {
+            case "save":
+                gameState.__levelDisplayBanner.setText("Saving Results!", Infinity);
+                _flushLoadedChunks(gameState.zone.zoneData, gameState.loadedChunks);
+                let zoneBuilder = null;
+                for(let res in gameState.zones) {
+                    zoneBuilder = gameState.zones[res];
+                    break;
+                }
+                _saveLevel(gameState.__levelDisplayBanner, zoneBuilder.origPath, gameState.zone.zoneData);
+                break;
+            case "hitbox":
+                gameState.__levelShowHitboxes = !gameState.__levelShowHitboxes;
+                gameState.__levelDisplayBanner.setText("Toggling Hitboxes " + ((gameState.__levelShowHitboxes)? "On": "Off"), 1000);
+                break;
+        }
+        
+        gameState.lastBlockLocation = blockLoc;
+        gameState.clickWasDown = gameState.mouse.pressed;
+    }
+    
+    function draw(canvas, painter, gameState) {    
+        // Clear the canvas...
+        painter.fillStyle = "white"
+        painter.fillRect(0, 0, canvas.width, canvas.height);
+        
+        gameState.zone.draw(gameState.canvas, gameState.painter, gameState);
+        
+        for(let [x, y, chunk] of gameState.loadedChunks) {
+            for(let bx = 0; bx < chunk.blocks.length; bx++) {
+                let blockCol = chunk.blocks[bx];
+                
+                for(let by = 0; by < blockCol.length; by++) {
+                    let block = blockCol[by];
+                    
+                    let gx = x * gameState.zone.zoneData.chunkSize + bx;
+                    let gy = y * gameState.zone.zoneData.chunkSize + by;
+                    
+                    let [canvX, canvY, canvW, canvH] = gameState.cameras[0].transformBox([gx, gy, 1, 1]);
+                    
+                    painter.strokeStyle = "black";
+                    painter.strokeRect(canvX, canvY, canvW, canvH);                    
+                }
+            }
+        }
+        
+        if(gameState.__levelShowHitboxes) {
+            for(let [x, y, chunk] of gameState.loadedChunks) {
+                for(let entity of chunk.entities) {                
+                    painter.strokeStyle = "red";
+                    painter.strokeRect(...gameState.cameras[0].transformBox(entity.getHitBox()));
+                }
+            }
+            
+            for(let player of gameState.zone.zoneData.players) {
+                painter.strokeStyle = "red";
+                painter.strokeRect(...gameState.cameras[0].transformBox(player.getHitBox()));
+            }
+        }
+                
+        let [selLocX, selLocY] = gameState.__levelHoverIndicator.getBlockLocation();
+        if(
+            (selLocX != null) && !gameState.__levelSelectorBar.getOverBar() 
+            && !gameState.__levelActionBar.getOverBar() 
+            && gameState.__levelHoverIndicator.getLocation()
+        ) {
+            gameState.__levelHoverIndicator.draw(canvas, painter, gameState.cameras[0]);
+        }
+        gameState.__levelSelectorBar.draw(canvas, painter, gameState.cameras[0]);
+        gameState.__levelActionBar.draw(canvas, painter, gameState.cameras[0]);
+        gameState.__levelDisplayBanner.draw();
+    }
+    
+    function gameLoop(timeStep, gameState) {
+        if(gameState.__levelHoverIndicator == null) {
+            gameState.__levelHoverIndicator = new GameHoverBlock(0, 0, gameState.assets);
+            gameState.__levelSelectorBar = new GameSelectPanel(0, 0, gameState.assets);
+            gameState.__levelActionBar = new ActionBar(0, 0, gameState.assets);
+            gameState.__levelDisplayBanner = new BannerDisplay(gameState);
+            // Grab the only zone and load it in...
+            for(let zone in gameState.zones) {
+                gameState.zone = gameState.zones[zone].buildZone([{tracks: []}]);
+                break;
+            }
+            gameState.zone.initGameState(gameState);
+            gameState.zone.zoneData.players = gameState.__players;
+        }
+        
+        update(timeStep, gameState);
+        draw(gameState.canvas, gameState.painter, gameState);
+    }
+    
+    let gameState = {};
+    gameState.entityTypes = _gameObjListToMapping(gameInfo.objects.entities);
+    gameState.blockTypes = _gameObjListToMapping(gameInfo.objects.blocks);
+    gameState.playerTypes = _gameObjListToMapping(gameInfo.objects.players);
+    gameState.loadedChunks = [];
+    gameState.lastBlockLocation = null;
+    gameState.clickWasDown = false;
+    gameState.__levelShowHitboxes = false;
+    
+    let levelEditSprites = {
+        "_levelEditHover": {
+            "image": "levelEdit/hover.png",
+            "animations": {
+                "main": {
+                    "speed": 150
+                }
+            }
+        },
+        "_levelEditDelete": {
+            "image": "levelEdit/deleteSelected.png",
+        },
+        "_levelEditSave": {
+            "image": "levelEdit/save.png"
+        },
+        "_levelEditHitbox": {
+            "image": "levelEdit/hitbox.png"
+        }
+    };
+    
+    gameInfo.assets.sprites = (gameInfo?.assets?.sprites != null)? {...gameInfo.assets.sprites, ...levelEditSprites}: levelEditSprites;
+    
+    gameInfo.assets.flags = gameInfo.assets.flags ?? {};
+    gameInfo.assets.flags.isLevelEditor = true;
+    
+    let theZone = gameInfo.zones[editZone];
+    gameInfo.zones = {};
+    gameInfo.zones[editZone] = theZone;
+    
+    this.makeBaseGame(gameLoop, gameState, gameInfo.assets, gameInfo.zones, _levelGen);
+}
+
+function _copyGameStateProperties(gameState, subGameState) {
+    subGameState.lastTimeStamp = gameState.lastTimeStamp;
+    subGameState.keepRunning = gameState.keepRunning;
+    subGameState.canvas = gameState.canvas;
+    subGameState.painter = gameState.painter;
+    subGameState.keysPressed = gameState.keysPressed;
+    subGameState.mouse = gameState.mouse;
+    subGameState.paused = gameState.paused;
+    subGameState.zones = gameState.zones;
+    subGameState.entityTypes = gameState.entityTypes;
+    subGameState.blockTypes = gameState.blockTypes;
+    subGameState.playerTypes = gameState.playerTypes;
+    subGameState.assets = gameState.assets;
+    subGameState.__zoneStackAction = gameState.__zoneStackAction;
+    subGameState.__zoneStack = gameState.__zoneStack;
+    
+    return subGameState;
+}
+
+function _attachGameAPI(gameState) {
+    // Some methods to allow entities/blocks to add other entities/blocks to the game...
+    gameState.addEntity = function(entity) {
+        let level = this.__zoneStack[this.__zoneStack.length - 1][0].zoneData;
+        
+        let [ex, ey] = _reboundEntity(entity, level.chunkSize, level.numChunks);
+        [ex, ey] = [Math.floor(ex / level.chunkSize), Math.floor(ey / level.chunkSize)];
+        
+        if([ex, ey] in this.chunkLookup) {
+            this.chunkLookup[[ex, ey]].entities.push(entity);
+            return;
+        }
+        
+        level.chunks[ex][ey].entities.push(entity.toJSON());
+    };
+
+    gameState.addBlock = function(block) {
+        let level = this.__zoneStack[this.__zoneStack.length - 1][0].zoneData;
+        
+        let [bx, by] = _reboundEntity(block, level.chunkSize, level.numChunks);
+        let [cx, cy] = [Math.floor(bx / level.chunkSize), Math.floor(by / level.chunkSize)];
+        [bx, by] = [Math.floor(bx), Math.floor(by)];
+        
+        block.x = Math.floor(bx);
+        block.y = Math.floor(by);
+        let subBX = bx % level.chunkSize;
+        let subBY = by % level.chunkSize;
+        
+        if([cx, cy] in this.chunkLookup) {
+            this.chunkLookup[[cx, cy]].blocks[subBX][subBY] = block;
+            return;
+        }
+        
+        level.chunks[cx][cy].blocks[subBX][subBY] = block.toJSON();
+    };
+    
+    gameState.addPlayer = function(player) {
+        this.__players.push(player);
+    }
+
+    gameState.getPlayers = function() {
+        return this.__players;
+    };
+
+    gameState.getNeighboringBlocks = function(block) {
+        let level = this.__zoneStack[this.__zoneStack.length - 1][0].zoneData;
+        let [bx, by] = _reboundEntity(block, level.chunkSize, level.numChunks).map(Math.floor);
+        
+        let neighbors = [
+            [null, null, null],
+            [null, null, null],
+            [null, null, null]
+        ];
+        
+        let iStart = bx - 1;
+        let jStart = by - 1;
+        
+        for(let i = iStart; i < bx + 2; i++) {
+            for(let j = jStart; j < by + 2; j++) {
+                let [cx, cy] = [i / level.chunkSize, j / level.chunkSize].map(Math.floor); 
+                
+                let subBX = i % level.chunkSize;
+                let subBY = j % level.chunkSize;
+                
+                if([cx, cy] in this.chunkLookup) {
+                    neighbors[i - iStart][j - jStart] = this.chunkLookup[[cx, cy]].blocks[subBX][subBY];
+                }
+            }
+        }
+        
+        return neighbors;
+    };
+
+    gameState.getBlocksAround = function(x, y) {
+        let dummyObj = new GameObject(x, y, null);
+        return this.getNeighboringBlocks(dummyObj);
+    }
+
+    gameState.getEntities = function() {
+        let entityLst = [];
+        
+        for(let [cx, cy, chunk] of this.loadedChunks) {
+            entityLst.push(...chunk.entities);
+        }
+        
+        return entityLst;
+    };
+    
+    gameState.getLevelBounds = function() {
+        let level = this.__zoneStack[this.__zoneStack.length - 1][0].zoneData;
+        return [0, 0, level.numChunks[0] * level.chunkSize, level.numChunks[1] * level.chunkSize];
+    }
+    
+    // Level management methods...
+    gameState.exitZone = function(replacementZone = null, cameraConfig = null) {
+        this.__zoneStackAction[0] = "pop";
+        this.__zoneStackAction[1] = replacementZone;
+        this.__zoneStackAction[2] = cameraConfig;
+    }
+    
+    gameState.enterZone = function(zoneName, cameraConfig = null) {
+        this.__zoneStackAction[0] = "push";
+        this.__zoneStackAction[1] = zoneName;
+        this.__zoneStackAction[2] = cameraConfig;
+    }
+}
+
+
+elem_proto.makeGame = async function(gameInfo, entryZone, cameraSpec = null) {
+    let gameState = {};
+    gameState.entityTypes = _gameObjListToMapping(gameInfo.objects.entities);
+    gameState.blockTypes = _gameObjListToMapping(gameInfo.objects.blocks);
+    gameState.playerTypes = _gameObjListToMapping(gameInfo.objects.players);
+    gameState.loadedChunks = [];
+    gameState.__players = null;
+    gameState.__zoneStack = [];
+    gameState.__zoneStackAction = ["push", entryZone, cameraSpec];
+    
+    function gameLoop(timeStep, globalGameState) {
+        // Zone management...
+        let [command, arg, cameraInfo] = globalGameState.__zoneStackAction;
+        
+        if(command == "push") {
+            let newZone = globalGameState.zones[arg].buildZone(cameraInfo);
+            let subGameState = {zoneName: arg};
+            globalGameState.__zoneStack.push([newZone, subGameState]);
+        }
+        else if(command == "pop") {
+            globalGameState.__zoneStack.pop();
+            if(arg != null) {
+                let newZone = globalGameState.zones[arg].buildZone(cameraInfo);
+                let subGameState = {zoneName: arg};
+                globalGameState.__zoneStack.push([newZone, subGameState]);
+            }
+        }
+        
+        globalGameState.__zoneStackAction = [null, null, null];
+        
+        if(globalGameState.__zoneStack.length <= 0) {
+            globalGameState.keepRunning = false;
+            return;
+        }
+        
+        let [zone, subGameState] = globalGameState.__zoneStack[globalGameState.__zoneStack.length - 1];
+        
+        _copyGameStateProperties(globalGameState, subGameState);
+        
+        // Setup player object if we just started the game...
+        if(!zone.initialized(subGameState)) {
+            console.log("YEP");
+            _attachGameAPI(subGameState);
+            zone.initGameState(subGameState);
+        }
+        
+        zone.update(timeStep, subGameState);
+        zone.draw(globalGameState.canvas, globalGameState.painter, subGameState);
+    }
+    
+    gameInfo.assets.flags = gameInfo.assets.flags ?? {};
+    gameInfo.assets.flags.isLevelEditor = false;
+    
+    this.makeBaseGame(gameLoop, gameState, gameInfo.assets, gameInfo.zones);
 }

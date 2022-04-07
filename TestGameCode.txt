@@ -2,9 +2,9 @@
 // Game code goes here....
 
 class LogBlock extends GameCollisionObject {
-    constructor(x, y, sprites) {
-        super(x, y, sprites);
-        this._sprite = sprites.logSprite.buildSprite();
+    constructor(x, y, assets) {
+        super(x, y, assets);
+        this._sprite = assets.sprites.logSprite.buildSprite();
         this._collisionSides = {"top": true};
     }
     
@@ -23,9 +23,9 @@ class LogBlock extends GameCollisionObject {
 }
 
 class GameBlock extends GameCollisionObject {
-    constructor(x, y, sprites) {
-        super(x, y, sprites);
-        this._sprite = sprites.sandSprite.buildSprite();
+    constructor(x, y, assets) {
+        super(x, y, assets);
+        this._sprite = assets.sprites.sandSprite.buildSprite();
         this._sprite.setAnimation("middle");
     }
     
@@ -47,9 +47,9 @@ class GameBlock extends GameCollisionObject {
 }
 
 class GameBlock2 extends GameCollisionObject {
-    constructor(x, y, sprites) {
-        super(x, y, sprites);
-        this._sprite = sprites.sandSprite.buildSprite();
+    constructor(x, y, assets) {
+        super(x, y, assets);
+        this._sprite = assets.sprites.sandSprite.buildSprite();
         this._sprite.setAnimation("top");
     }
     
@@ -68,12 +68,16 @@ class GameBlock2 extends GameCollisionObject {
         let [cx, cy, cw, ch] = box;
         this._sprite.draw(painter, cx, cy, cw, ch);
     }
+    
+    getZOrder() {
+        return 2;
+    }
 }
 
 class Tree extends GameObject {
-    constructor(x, y, sprites) {
-        super(x, y, sprites);
-        this._sprite = sprites.treeSprite.buildSprite();
+    constructor(x, y, assets) {
+        super(x, y, assets);
+        this._sprite = assets.sprites.treeSprite.buildSprite();
         this._numBlocks = 4;
         this._digIn = 4 / 32;
     }
@@ -91,12 +95,16 @@ class Tree extends GameObject {
         let [cx, cy, cw, ch] = box;
         this._sprite.draw(painter, cx, cy, cw, ch);
     }
+    
+    getZOrder() {
+        return -1
+    }
 }
 
 class Grass extends GameObject {
-    constructor(x, y, sprites) {
-        super(x, y, sprites);
-        this._sprite = sprites.grassSprite.buildSprite();
+    constructor(x, y, assets) {
+        super(x, y, assets);
+        this._sprite = assets.sprites.grassSprite.buildSprite();
     }
     
     update(timeStep, gameState) {
@@ -117,9 +125,9 @@ class Grass extends GameObject {
 }
 
 class Player extends GameCollisionObject {
-    constructor(x, y, sprites) {
-        super(x, y, sprites);
-        this._sprite = sprites.playerSprite.buildSprite();
+    constructor(x, y, assets) {
+        super(x, y, assets);
+        this._sprite = assets.sprites.playerSprite.buildSprite();
         this._sprite.setAnimation("stand");
         this._inset = [4 / 32, 4 / 32, 28 / 32, 24 / 32];
         this._vx = 0;
@@ -145,7 +153,7 @@ class Player extends GameCollisionObject {
         if(this._hp <= 0) {
             this._hp = 5;
             this._waitTime = 0;
-            return true;
+            gameState.exitZone(gameState.zoneName);
         }
         
         let keys = gameState.keysPressed;
@@ -183,7 +191,8 @@ class Player extends GameCollisionObject {
         this.x += this._vx * timeStep;
         this.y += this._vy * timeStep;
         
-        if((this.y + this._inset[3]) >= (gameState.level.numChunks[1] * gameState.level.chunkSize)) return true;
+        let [__x, __y, w, h] = gameState.getLevelBounds();
+        if((this.y + this._inset[3]) >= h) gameState.exitZone(gameState.zoneName);
         
         this._sprite.update(timeStep);
     }
@@ -208,7 +217,7 @@ class Player extends GameCollisionObject {
     handleCollision(obj, side) {
         if(side == "inside") return;
         if(side == "bottom") {
-            this._numJumps = Infinity;
+            this._numJumps = 2;
             if(this._sprite.getAnimation() == "jump") this._sprite.setAnimation("stand");
             if(obj instanceof Enemy) this._vy = -this._vy;
             else this._vy = 0;
@@ -231,10 +240,10 @@ class Player extends GameCollisionObject {
 
 
 class Enemy extends GameCollisionObject {
-    constructor(x, y, sprites) {
-        super(x, y, sprites);
-        this.__ss = sprites;
-        this._sprite = sprites.enemySprite.buildSprite();
+    constructor(x, y, assets) {
+        super(x, y, assets);
+        this.__ss = assets.sprites;
+        this._sprite = assets.sprites.enemySprite.buildSprite();
         this._sprite.setAnimation("stand");
         this._vx = 0;
         this._vy = 0;
@@ -253,11 +262,19 @@ class Enemy extends GameCollisionObject {
     update(timeStep, gameState) {
         if(this._hp <= 0) return true;
         
-        let [px, py] = gameState.getPlayer().getLocation();
+        let minPX = null;
+        let minDist = Infinity;
         
-        let dist = Math.sqrt((px - this.x) * (px - this.x) + (py - this.y) * (py - this.y));
+        for(let player of gameState.getPlayers()) {
+            let [px, py] = player.getLocation();
+            let dist = Math.sqrt((px - this.x) * (px - this.x) + (py - this.y) * (py - this.y));
+            if(dist < minDist) {
+                minPX = px;
+                minDist = dist;
+            }
+        }
         
-        this._ax = (dist < 9)? 0.03 / 1000 * Math.sign(px - this.x): 0;
+        this._ax = (minPX != null && minDist < 9)? 0.03 / 1000 * Math.sign(minPX - this.x): 0;
         
         if(this._ax != 0) {
             this._sprite.setHorizontalFlip(this._ax > 0);
@@ -320,9 +337,9 @@ class Enemy extends GameCollisionObject {
 }
 
 class Ball extends GameCollisionObject {
-    constructor(x, y, sprites) {
-        super(x, y, sprites);
-        this._sprite = sprites.beachBallSprite.buildSprite();
+    constructor(x, y, assets) {
+        super(x, y, assets);
+        this._sprite = assets.sprites.beachBallSprite.buildSprite();
         this._sprite.setAnimation("still");
         this._vx = 0;
         this._vy = 0;
@@ -388,115 +405,105 @@ class Ball extends GameCollisionObject {
     }
 }
 
-function draw(canvas, painter, gameState) {
-    // Clear the canvas...
-    painter.fillStyle = "white"
-    painter.fillRect(0, 0, canvas.width, canvas.height);
-    
-    // Draw our single block...
-    gameState.block.draw(gameState.canvas, gameState.painter, gameState.camera);
-}
-
-// This function will get called over and over...
-function gameLoop(timeStep, gameState) {
-    update(timeStep, gameState);
-    draw(gameState.canvas, gameState.painter, gameState);
-}
-
-let gameState = {
-    "cameraMoveSpeed": 20
-}
-
-let levelData = {
-    sprites: {
-        playerSprite: {
-            image: "images/seagull2.png",
-            width: 42,
-            animations: {
-                "stand": {
-                    "frames": [0],
-                },
-                "run": {
-                    "speed": 10
-                },
-                "jump": {
-                    "frames": [0, 4, 5],
-                    "speed": 150,
-                    "cycles": 1
+let gameInfo = {
+    objects: {
+        blocks: [GameBlock, GameBlock2, Tree, Grass, LogBlock],
+        entities: [Enemy, Ball],
+        players: [Player]
+    },
+    assets: {
+        sprites: {
+            playerSprite: {
+                image: "images/seagull2.png",
+                width: 42,
+                animations: {
+                    "stand": {
+                        "frames": [0],
+                    },
+                    "run": {
+                        "speed": 10
+                    },
+                    "jump": {
+                        "frames": [0, 4, 5],
+                        "speed": 150,
+                        "cycles": 1
+                    }
                 }
-            }
-        },
-        enemySprite: {
-            image: "images/croc.png",
-            width: 96,
-            animations: {
-                "stand": {
-                    "frames": [4, 5],
-                    "speed": 500
-                },
-                "run": {
-                    "frames": [0, 1, 2, 3],
-                    "speed": 100
+            },
+            enemySprite: {
+                image: "images/croc.png",
+                width: 96,
+                animations: {
+                    "stand": {
+                        "frames": [4, 5],
+                        "speed": 500
+                    },
+                    "run": {
+                        "frames": [0, 1, 2, 3],
+                        "speed": 100
+                    }
                 }
-            }
-        },
-        sandSprite: {
-            image: "images/sand.png",
-            animations: {
-                "top": {
-                    "frames": [0]
-                },
-                "middle": {
-                    "frames": [1]
+            },
+            sandSprite: {
+                image: "images/sand.png",
+                animations: {
+                    "top": {
+                        "frames": [0]
+                    },
+                    "middle": {
+                        "frames": [1]
+                    }
                 }
-            }
-        },
-        backgroundSprite: {
-            image: "images/background2.png",
-            width: 250
-        },
-        treeSprite: {
-            image: "images/tree.png",
-            width: 60
-        },
-        grassSprite: {
-            image: "images/grass.png",
-            width: 20
-        },
-        logSprite: {
-            image: "images/log.png"
-        },
-        beachBallSprite: {
-            image: "images/beachball.png",
-            animations: {
-                "still": {
-                    "frames": [0]
-                },
-                "spin": {
-                    "speed": 100
+            },
+            backgroundSprite: {
+                image: "images/background2.png",
+                width: 250
+            },
+            treeSprite: {
+                image: "images/tree.png",
+                width: 60
+            },
+            grassSprite: {
+                image: "images/grass.png",
+                width: 20
+            },
+            logSprite: {
+                image: "images/log.png"
+            },
+            beachBallSprite: {
+                image: "images/beachball.png",
+                animations: {
+                    "still": {
+                        "frames": [0]
+                    },
+                    "spin": {
+                        "speed": 100
+                    }
                 }
             }
         }
+    },
+    zones: {
+        test: {
+            zoneData: "testdata/test_level.json",
+            preDraw: function(canvas, painter, gameState) {
+                if(gameState.background == null) gameState.background = gameState.assets.sprites.backgroundSprite.buildSprite();        
+
+                let bk = gameState.background;
+                let bgRatio = (bk.width / bk.height);
+                let cRatio = (canvas.width / canvas.height);
+
+                let {width, height} = canvas;
+
+                width = (bgRatio < cRatio)? width: height * bgRatio;
+                height = (bgRatio < cRatio)? width / bgRatio: height;
+                let centerX = canvas.width / 2;
+                let centerY = canvas.height / 2;
+
+                gameState.background.draw(painter, centerX - width / 2, centerY - height / 2, width, height);
+            }
+        },
     }
 };
 
-let callbacks = {
-    "preDraw": function(canvas, painter, gameState) {
-        if(gameState.background == null) gameState.background = gameState.sprites.backgroundSprite.buildSprite();        
-        
-        let bk = gameState.background;
-        let bgRatio = (bk.width / bk.height);
-        let cRatio = (canvas.width / canvas.height);
-        
-        let {width, height} = canvas;
-        
-        width = (bgRatio < cRatio)? width: height * bgRatio;
-        height = (bgRatio < cRatio)? width / bgRatio: height;
-        let centerX = canvas.width / 2;
-        let centerY = canvas.height / 2;
-        
-        gameState.background.draw(painter, centerX - width / 2, centerY - height / 2, width, height);
-    }
-};
-
-element.makeGame("testdata/test_level.json", [GameBlock, GameBlock2, Tree, Grass, LogBlock], [Enemy, Ball], levelData, Player, callbacks=callbacks);
+element.makeGame(gameInfo, "test");
