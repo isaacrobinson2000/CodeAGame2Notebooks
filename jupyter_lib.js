@@ -358,8 +358,18 @@ function _adjustTrackBox(trackBox, hitBox) {
     else if(cy > (trackBox[1] + trackBox[3])) trackBox[1] = cy - trackBox[3];
 }
 
-function _computeAdjustedZoom(zoomVal, trackBox, hitBox) {
+function _computeAdjustedZoom(initZoomMult, trackBox, hitBox, maxZoomMult) {
     // TODO...
+    let [x, y, w, h] = hitBox;
+    let cx = x + w / 2;
+    let cy = y + h / 2;
+    
+    let tBx = trackBox[0];
+    let tBy = trackBox[1];
+    let tBcx = trackBox[0] + trackBox[2] / 2;
+    let tBcy = trackBox[1] + trackBox[3] / 2;
+    
+    return _bound(Math.max(Math.abs((cy - tBcy) / (tBy - tBcy)), Math.abs((cx - tBcx) / (tBx - tBcx))), initZoomMult, maxZoomMult);
 }
 
 class Camera {
@@ -458,7 +468,7 @@ class Camera {
             this._trackBox[2] * cw,
             this._trackBox[3] * ch
         ];
-        
+                
         // Adjust the tracking box using currently tracked objects (if there are any)...
         if((this._tracks.length > 0)) {
             let firstObject = null;
@@ -474,6 +484,8 @@ class Camera {
                 }
                 else {
                     throw "Not implemented yet!";
+                    _adjustTrackBox(trackBox, hitBox);
+                    _adjustTrackBox(trackBox, firstObject.getHitBox);
                     // Reajust zoom, move to object, move to first object...
                 }
             }
@@ -492,8 +504,8 @@ class Camera {
     
     getBounds() {
         let [cx, cy] = this._centerPoint;
-        let w = this._canvas.width / this._zoom;
-        let h = this._canvas.height / this._zoom;
+        let w = (this._canvas.width * this._subBox[2]) / this._zoom;
+        let h = (this._canvas.height * this._subBox[3]) / this._zoom;
         
         return [cx - w / 2, cy - h / 2, w, h];
     }
@@ -1138,6 +1150,7 @@ function _manageChunks(level, cameras, loadedChunks, blockTypes, entityTypes, as
             for(let yic = yStartChunk; yic <= yEndChunk; yic++) {
                 if(!([xic, yic] in doneChunks)) {
                     newLoadedChunks.push([xic, yic, _loadChunk(xic, yic, level, blockTypes, entityTypes, assets)]); 
+                    doneChunks[[xic, yic]] = true;
                 }
             }
         }
@@ -1485,8 +1498,18 @@ class Zone {
         }
         
         // Update the player... Bound player to game zone...
-        for(let player of gameState.__players) {
-            if(player.update(timeStep, gameState)) throw "Not implemented";
+        for(let i = 0; i < gameState.__players.length; i++) {
+            let player = gameState.__players[i];
+            
+            if(player.update(timeStep, gameState)) {
+                _popAndSwapWithEnd(gameState.__players, i);
+                for(let camera of gameState.cameras) {
+                    let tracks = camera.getTracks();
+                    let index = track.indexOf(player);
+                    if(index >= 0) _popAndSwapWithEnd(tracks, index);
+                }
+                continue;
+            }
             _reboundEntity(player, chunkSize, numChunks);
         }
         
