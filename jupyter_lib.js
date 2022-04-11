@@ -455,8 +455,9 @@ class Camera {
     }
     
     update(levelBounds) {
-        let minCanvasSide = Math.min(this._canvas.width, this._canvas.height);
-        let maxCanvasSide = Math.max(this._canvas.width, this._canvas.height);
+        let [canvX, canvY, canvW, canvH] = this.getDisplayZone();
+        let minCanvasSide = Math.min(canvW, canvH);
+        let maxCanvasSide = Math.max(canvW, canvH);
         this._zoom = Math.max(minCanvasSide / this._minBlocksShown, maxCanvasSide / this._maxBlocksShown);
         
         // Get the current track box...
@@ -1116,7 +1117,7 @@ function _getChunkBoundsFromCamera(level, camera) {
     };
 }
 
-function _isChunkWithinCameras(level, x, y, chunk, cameras) {
+function _isChunkWithinCameras(level, x, y, cameras) {
     for(let camera of cameras) {
         let {xStartChunk, yStartChunk, xEndChunk, yEndChunk} = _getChunkBoundsFromCamera(level, camera);
         
@@ -1133,7 +1134,7 @@ function _manageChunks(level, cameras, loadedChunks, blockTypes, entityTypes, as
     
     // Unload chunks that are out of the area... Keep others loaded...
     for(let [x, y, chunk] of loadedChunks) {
-        if(!_isChunkWithinCameras(level, x, y, chunk, cameras)) {
+        if(!_isChunkWithinCameras(level, x, y, cameras)) {
             _unloadChunk(chunk, x, y, level);
         }
         else {
@@ -1357,7 +1358,7 @@ function _buildCamerasFrom(canvas, cameraConfig, players) {
         let cameraObj = new Camera(canvas, blockSize, minBlocksShown, maxBlocksShown, maxZoomAdjustment, trackBox, subCanvasBox);
         let trackPlayers = [];
         
-        for(let idx in tracks) {
+        for(let idx of tracks) {
             trackPlayers.push(players[idx]);
         }
         
@@ -1365,6 +1366,8 @@ function _buildCamerasFrom(canvas, cameraConfig, players) {
         
         cameraObjs.push(cameraObj);
     }
+    
+    console.log(cameraObjs);
     
     return cameraObjs;
 }
@@ -1427,7 +1430,7 @@ class Zone {
                 let playerType = gameState.playerTypes[player._$type];
                 gameState.__players.push(playerType.fromJSON(player, gameState.assets));
             }
-            
+                        
             gameState.cameras = _buildCamerasFrom(gameState.canvas, this.cameraConfig, gameState.__players);
             
             if(this._initGameState != null) Object.assign(gameState, this._initGameState);
@@ -1568,8 +1571,16 @@ class Zone {
             gameState.painter.save();
             gameState.painter.clip(clipBox, "evenodd");
             
+            let [cx, cy, cw, ch] = camera.getBounds();
+            
             for(let object of drawObjects) {
-                object.draw(gameState.canvas, gameState.painter, camera);
+                let [ox, oy, ow, oh] = object.getHitBox();
+                if(
+                    !((ox >= (cx + cw)) || ((ox + ow) <= cx))
+                    && !((oy >= (cy + ch)) || ((oy + oh) <= cy)) 
+                ) {
+                    object.draw(gameState.canvas, gameState.painter, camera);
+                }
             }
             
             gameState.painter.restore();
@@ -2312,7 +2323,6 @@ elem_proto.makeGame = async function(gameInfo, entryZone, cameraSpec = null) {
         
         // Setup player object if we just started the game...
         if(!zone.initialized(subGameState)) {
-            console.log("YEP");
             _attachGameAPI(subGameState);
             zone.initGameState(subGameState);
         }
