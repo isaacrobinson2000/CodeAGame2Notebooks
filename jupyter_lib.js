@@ -358,22 +358,45 @@ function _adjustTrackBox(trackBox, hitBox) {
     else if(cy > (trackBox[1] + trackBox[3])) trackBox[1] = cy - trackBox[3];
 }
 
-function _computeAdjustedZoom(initZoomMult, trackBox, hitBox, maxZoomMult) {
-    // TODO...
-    let [x, y, w, h] = hitBox;
-    let cx = x + w / 2;
-    let cy = y + h / 2;
+function _computeTrackedExtents(tracks) {
+    let txMin = Infinity,
+        tyMin = Infinity,
+        txMax = -Infinity,
+        tyMax = -Infinity;
     
-    let tBx = trackBox[0];
-    let tBy = trackBox[1];
-    let tBcx = trackBox[0] + trackBox[2] / 2;
-    let tBcy = trackBox[1] + trackBox[3] / 2;
+    for(let track of tracks) {
+        if(!("getBoundingBox" in track)) continue;
+        let [bx, by, bw, bh] = track.getBoundingBox();
+        let xCenter = bx + bw / 2;
+        let yCenter = by + bh / 2;
+        
+        txMin = Math.min(txMin, xCenter);
+        tyMin = Math.min(tyMin, yCenter);
+        txMax = Math.max(txMax, xCenter);
+        tyMax = Math.max(tyMax, yCenter);
+    }
     
-    return _bound(Math.max(Math.abs((cy - tBcy) / (tBy - tBcy)), Math.abs((cx - tBcx) / (tBx - tBcx))), initZoomMult, maxZoomMult);
+    return [txMin, tyMin, txMax - txMin, tyMax - tyMin];
+}
+
+function _adjustZoomFactor(trackBox, zoom, zoomMultCap, trackExtents) {
+    let newZoomFactor = _bound(Math.max(trackExtents[2] / trackBox[2], trackExtents[3] / trackBox[3]), 1, zoomMultCap);
+    if(newZoomFactor != newZoomFactor) return [zoom, trackBox];
+    let [centX, centY] = [trackBox[0] + trackBox[2] / 2, trackBox[1] + trackBox[3] / 2];
+    
+    return [
+        zoom / newZoomFactor,
+        [
+            centX - (trackBox[2] / 2) / newZoomFactor, 
+            centY - (trackBox[3] / 2) / newZoomFactor, 
+            trackBox[2] / newZoomFactor, 
+            trackBox[3] / newZoomFactor
+        ]
+    ]
 }
 
 class Camera {
-    constructor(canvas, blockSize, minBlocksShown, maxBlocksShown, maxZoomAdjustment = 0.5, trackBox = [1/3, 1/3, 1/3, 1/3], subCanvasBox = [0, 0, 1, 1]) {
+    constructor(canvas, blockSize, minBlocksShown, maxBlocksShown, maxZoomAdjustment = 1.5, trackBox = [1/3, 1/3, 1/3, 1/3], subCanvasBox = [0, 0, 1, 1]) {
         this._canvas = canvas;
         this._blockSize = blockSize;
         this._minBlocksShown = minBlocksShown;
@@ -383,6 +406,7 @@ class Camera {
         this._centerPoint = [0, 0];
         this._trackBox = trackBox;
         this._subBox = subCanvasBox;
+        this._maxZoomAdjustment = maxZoomAdjustment;
     }
     
     setTrackBox(trackBox) {
@@ -454,6 +478,14 @@ class Camera {
         return this._maxBlocksShown = value;
     }
     
+    getMaxZoomAdjustment() {
+        return this._maxZoomAdjustment;
+    }
+    
+    setMaxZoomAdjustment(value) {
+        this._maxZoomAdjustment = +value;
+    }
+    
     update(levelBounds) {
         let [canvX, canvY, canvW, canvH] = this.getDisplayZone();
         let minCanvasSide = Math.min(canvW, canvH);
@@ -474,21 +506,14 @@ class Camera {
         if((this._tracks.length > 0)) {
             let firstObject = null;
             
-            for(let elem of this._tracks) {
-                if(!("getHitBox" in elem)) continue;
-                let hitBox = elem.getHitBox();
-                
-                if(firstObject == null) {
-                    // FIRST OBJECT: Move the tracking box to place the object in bounds...
-                    _adjustTrackBox(trackBox, hitBox);
-                    firstObject = elem;
-                }
-                else {
-                    throw "Not implemented yet!";
-                    _adjustTrackBox(trackBox, hitBox);
-                    _adjustTrackBox(trackBox, firstObject.getHitBox);
-                    // Reajust zoom, move to object, move to first object...
-                }
+            let trackedExtents = _computeTrackedExtents(this._tracks);            
+            [this._zoom, trackBox] = _adjustZoomFactor(trackBox, this._zoom, this._maxZoomAdjustment, trackedExtents);
+            
+            for(let i = this._tracks.length - 1; i >= 0; i--) {
+                let elem = this._tracks[i];
+                if(!("getBoundingBox" in elem)) continue;
+                let hitBox = elem.getBoundingBox();
+                _adjustTrackBox(trackBox, hitBox);
             }
         }
         
@@ -815,8 +840,26 @@ class GameObject {
         return obj;
     }
     
-    getHitBox() {
-        return [this.x, this.y, 1, 1];
+    getHitBoxes() {
+        return [
+            [this.x, this.y, 1, 1]
+        ];
+    }
+    
+    getBoundingBox() {
+        let minX = Infinity, 
+            minY = Infinity, 
+            maxX = -Infinity, 
+            maxY = -Infinity;
+        
+        for(let [x, y, width, height] of this.getHitBoxes()) {
+            minX = Math.min(x, minX);
+            minY = Math.min(y, minY);
+            maxX = Math.max(x + width, maxX);
+            maxY = Math.max(y + height, maxY);
+        }
+        
+        return [minX, minY, maxX - minX, maxY - minY];
     }
     
     getZOrder() {
@@ -837,6 +880,56 @@ class GameCollisionObject extends GameObject {
         
         this._collisionSides = {"left": true, "top": true, "right": true, "bottom": true};
         this._movable = false;
+    }
+    
+    __getFullCollisionBox() {
+        let [x, y, w, h] = this.getBoundingBox();
+        return [
+            Math.min(x, this.___px), 
+            Math.min(y, this.___py),
+            w + Math.abs(x - this.___px),
+            h + Math.abs(y - this.___py)
+        ]
+    }
+    
+    __getDisplacementVector() {
+        return [this.x - this.___px, this.y - this.___py];
+    }
+    
+    handleCollision(obj, side, thisBox, otherBox, thisBoxIdx, otherBoxIdx) {}
+    
+    isSolid(otherObj, thisBoxIdx, thisSideIdx) {
+        return true;
+    }
+    
+    __collisionAdjust(box, bound, boundIdx) {
+        let [_x, _y, width, height] = box;
+        let [[x, y], ax, len] = bound;
+        
+        let [xOff, yOff] = [this.x - _x, this.y - _y];
+
+        if(!this._movable) return;
+
+        let sign = GameCollisionManager.sideSigns[boundIdx];
+        let [sdx, sdy] = this.__getDisplacementVector().map((e) => Math.sign(e));
+
+        let cX = xOff + (x - ((sign + 1) * width / 2));
+        let cY = yOff + (y - ((sign + 1) * height / 2));
+        this.x = (ax == 0 || sdx != sign)? this.x: cX;
+        this.y = (ax == 1 || sdy != sign)? this.y: cY;
+    }
+    
+    onCollisionEnd() {        
+        this.___px = this.x;
+        this.___py = this.y;
+    }
+}
+
+window.GameCollisionObject = GameCollisionObject;
+
+class GameCollisionManager {
+    constructor() {
+        this._collisions = [];
     }
     
     __intersection(boxSeg, dvec, boxSeg2, dvec2, ignoreT = false) {
@@ -875,104 +968,40 @@ class GameCollisionObject extends GameObject {
         return [t, segOverlap, boundAtCollision];
     }
     
-    __getCollisionSides() {
-        let [x, y, w, h] = this.getHitBox();
-        [x, y] = [this.___px, this.___py];
+    __getCollisionSides(boxes, dispVector, collisionSides) {
+        let [dx, dy] = dispVector;
         
         // Build hitbox sides...
-        let sides = [
-            [[x, y + h], 0, w],
-            [[x, y], 0, w],
-            [[x + w, y], 1, h],
-            [[x, y], 1, h]
-        ];
+        let allSides = [];
         
-        for(let i = 0; i < GameCollisionObject.sideNames.length; i++) {
-            sides[i] = (this._collisionSides[GameCollisionObject.sideNames[i]])? sides[i]: null;
-        }
-        
-        return sides;
-    }
-    
-    __getFullCollisionBox() {
-        let [x, y, w, h] = this.getHitBox();
-        return [
-            Math.min(x, this.___px), 
-            Math.min(y, this.___py),
-            w + Math.abs(x - this.___px),
-            h + Math.abs(y - this.___py)
-        ]
-    }
-    
-    __getDisplacementVector() {
-        return [this.x - this.___px, this.y - this.___py];
-    }
-    
-    handleCollision(obj, side) {}
-    
-    isSolid(obj, side) {
-        return true;
-    }
-    
-    onCollision(other) {
-        if(this._movable && (other instanceof GameCollisionObject)) {
-            // Gives us direction of move...
-            let [dx, dy] = this.__getDisplacementVector();
-            let [dx2, dy2] = other.__getDisplacementVector();
-
-            let oSides = other.__getCollisionSides();
-            let thisSides = this.__getCollisionSides();
+        for(let i = 0; i < boxes.length; i++) {
+            let [x, y, w, h] = boxes[i];
             
-            let sideSwap = GameCollisionObject.sideSwaps;
-            thisSides = thisSides.map((e, i, a) => a[sideSwap[i]]);
+            x -= dx;
+            y -= dy;
             
-            let bestTime = Infinity;
-            let bestBoundIdx = null;
-
-            for(let i = 0; i < thisSides.length; i++) {
-                if((oSides[i] == null) || (thisSides[i] == null)) continue;
-                
-                let [time, overlap, bound] = this.__intersection(thisSides[i], [dx, dy], oSides[i], [dx2, dy2], true);
-
-                if(bestTime > time) {
-                    bestTime = time;
-                    bestBoundIdx = i;
-                }
+            let sides = [
+                [[x, y + h], 0, w],
+                [[x, y], 0, w],
+                [[x + w, y], 1, h],
+                [[x, y], 1, h]
+            ];
+            
+            let cSides = this._colSidesAt(collisionSides, i);
+                        
+            for(let i = 0; i < GameCollisionManager.sideNames.length; i++) {
+                sides[i] = (cSides[GameCollisionManager.sideNames[i]])? sides[i]: null;
             }
             
-            if(bestTime != Infinity) {
-                GameCollisionObject.appendCollision(this, other, bestBoundIdx, bestTime);
-            }
+            allSides.push(sides);
         }
         
-        GameCollisionObject.finalPassDone = false;
+        return allSides;
     }
     
-    __collisionAdjust(bound, boundIdx) {
-        let [_x, _y, width, height] = this.getHitBox();
-        let [[x, y], ax, len] = bound;
-
-        if(!this._movable) return;
-
-        let sign = GameCollisionObject.sideSigns[boundIdx];
-        let [sdx, sdy] = this.__getDisplacementVector().map((e) => Math.sign(e));
-
-        let cX = x - ((sign + 1) * width / 2);
-        let cY = y - ((sign + 1) * height / 2);
-        this.x = (ax == 0 || sdx != sign)? this.x: cX;
-        this.y = (ax == 1 || sdy != sign)? this.y: cY;
-    }
-    
-    onCollisionEnd() {
-        GameCollisionObject.manageAllCollisions();
-        
-        this.___px = this.x;
-        this.___py = this.y;
-    }
-    
-    __insideCheck(otherObj) {
-        let [x, y, w, h] = this.getHitBox();
-        let [ox, oy, ow, oh] = otherObj.getHitBox();
+    __insideCheck(box1, box2) {
+        let [x, y, w, h] = box1;
+        let [ox, oy, ow, oh] = box2;
         
         return (
             !((x >= (ox + ow)) || ((x + w) <= ox))
@@ -980,80 +1009,99 @@ class GameCollisionObject extends GameObject {
         );
     }
     
-    static manageAllCollisions() {
-        if(GameCollisionObject.finalPassDone) return;
-        
-        let colList = [];
-        for(let elem in GameCollisionObject.collisions) {
-            colList.push(GameCollisionObject.collisions[elem]);
-        }
-        colList.sort((a, b) => a[3] - b[3]);
-        
-        let sideSwap = GameCollisionObject.sideSwaps;
-        let sideNames = GameCollisionObject.sideNames;
-        
-        for(let [obj, otherObj, boundIdx, time] of colList) {
-            let dvec1 = obj.__getDisplacementVector();
-            let dvec2 = otherObj.__getDisplacementVector();
-            let thisB = obj.__getCollisionSides()[sideSwap[boundIdx]];
-            let otherB = otherObj.__getCollisionSides()[boundIdx];
+    addCollision(obj1, obj2) {
+        if((obj1 instanceof GameCollisionObject) && (obj2 instanceof GameCollisionObject)) {
+            // Gives us direction of move...
+            let obj1Vec = obj1.__getDisplacementVector();
+            let obj2Vec = obj2.__getDisplacementVector();
             
-            let [t, overlap, bound] = obj.__intersection(thisB, dvec1, otherB, dvec2);
+            let obj1Boxes = obj1.getHitBoxes();
+            let obj2Boxes = obj2.getHitBoxes();
+
+            let obj1SideList = this.__getCollisionSides(obj1Boxes, obj1Vec, obj1._collisionSides);
+            let obj2SideList = this.__getCollisionSides(obj2Boxes, obj2Vec, obj2._collisionSides);
+            
+            let sideSwap = GameCollisionManager.sideSwaps;
+            obj2SideList = obj2SideList.map((elm) => elm.map((e, i, a) => a[sideSwap[i]]));
+            
+            for(let i = 0; i < obj1Boxes.length; i++) {
+                for(let j = 0; j < obj2Boxes.length; j++) {
+                    let obj1Sides = obj1SideList[i];
+                    let obj2Sides = obj2SideList[j];
+                                        
+                    let bestTime = Infinity;
+                    let bestBoundIdx = null;
+
+                    for(let k = 0; k < obj2Sides.length; k++) {
+                        if((obj2Sides[k] == null) || (obj1Sides[k] == null)) continue;
+                        
+                        let [time, overlap, bound] = this.__intersection(obj1Sides[k], obj1Vec, obj2Sides[k], obj2Vec, true);
+
+                        if(bestTime > time) {
+                            bestTime = time;
+                            bestBoundIdx = k;
+                        }
+                    }
+                    
+                    if(bestTime != Infinity) {
+                        this._collisions.push([obj1, obj2, bestBoundIdx, bestTime, i, j]);
+                    }
+                }
+            }
+        }
+    }
+    
+    _colSidesAt(collisionSides, idx) {
+        return (Array.isArray(collisionSides))? collisionSides[idx]: collisionSides;
+    }
+    
+    resolveCollisions() {
+        this._collisions.sort((a, b) => a[3] - b[3]);
+        
+        let sideSwap = GameCollisionManager.sideSwaps;
+        let sideNames = GameCollisionManager.sideNames;
+        
+        for(let [obj1, obj2, boundIdx, time, boxI1, boxI2] of this._collisions) {
+            let dvec1 = obj1.__getDisplacementVector();
+            let dvec2 = obj2.__getDisplacementVector();
+            let obj1Box = obj1.getHitBoxes()[boxI1];
+            let obj2Box = obj2.getHitBoxes()[boxI2];
+            let obj1Side = this.__getCollisionSides([obj1Box], dvec1, this._colSidesAt(obj1._collisionSides, boxI1))[0][boundIdx];
+            let obj2Side = this.__getCollisionSides([obj2Box], dvec2, this._colSidesAt(obj2._collisionSides, boxI2))[0][sideSwap[boundIdx]];
+            
+            let [t, overlap, bound] = this.__intersection(obj1Side, dvec1, obj2Side, dvec2);
             
             if(overlap <= 0 || bound == null) {
                 // Do the objects overlap in this frame? If so, trigger an 'inside' event.
-                if(obj.__insideCheck(otherObj)) {
-                    obj.handleCollision(otherObj, "inside");
-                    otherObj.handleCollision(obj, "inside");
+                if(this.__insideCheck(obj1Box, obj2Box)) {
+                    obj1.handleCollision(obj2, "inside", obj1Box, boxI1, obj2Box, boxI2);
+                    obj2.handleCollision(obj1, "inside", obj2Box, boxI2, obj1Box, boxI1);
                 }
                 continue;
             }
-            
-            let [delta1, delta2] = (thisB[1])? [dvec1[0], dvec2[0]]: [dvec1[1], dvec2[1]];
+                        
+            let [delta1, delta2] = (bound[1])? [dvec1[0], dvec2[0]]: [dvec1[1], dvec2[1]];
             let direc = Math.sign((delta1 - delta2) * Math.abs(t));
-            if(direc != GameCollisionObject.sideSigns[boundIdx] && direc != 0) continue;
-            
-            let [[x, y], ax, len] = bound;            
-            
+            if(direc != GameCollisionManager.sideSigns[sideSwap[boundIdx]] && direc != 0) continue;
+                                    
             // Move both objects....
-            if(obj.isSolid(otherObj, sideNames[sideSwap[boundIdx]]) && otherObj.isSolid(obj, sideNames[boundIdx])) {
-                obj.__collisionAdjust(bound, boundIdx);
-                otherObj.__collisionAdjust(bound, sideSwap[boundIdx]);
+            if(obj1.isSolid(obj2, boxI1, sideNames[boundIdx]) && obj2.isSolid(obj1, boxI2, sideNames[sideSwap[boundIdx]])) {
+                obj1.__collisionAdjust(obj1Box, bound, sideSwap[boundIdx]);
+                obj2.__collisionAdjust(obj2Box, bound, boundIdx);
             }
+            
             // For extra functionality...
-            obj.handleCollision(otherObj, sideNames[sideSwap[boundIdx]]);
-            otherObj.handleCollision(obj, sideNames[boundIdx]);
+            obj1.handleCollision(obj2, sideNames[boundIdx], obj1Box, boxI1, obj2Box, boxI2);
+            obj2.handleCollision(obj1, sideNames[sideSwap[boundIdx]], obj2Box, boxI2, obj1Box, boxI1);
         }
         
-        GameCollisionObject.objectIdx = 0;
-        GameCollisionObject.objectMapping.clear();
-        GameCollisionObject.collisions = {};
-        GameCollisionObject.finalPassDone = true;
-    }
-    
-    static appendCollision(obj, otherObj, boundIdx, time) {
-        if(!GameCollisionObject.objectMapping.has(obj)) GameCollisionObject.objectMapping.set(obj, GameCollisionObject.objectIdx++);
-        if(!GameCollisionObject.objectMapping.has(otherObj)) GameCollisionObject.objectMapping.set(otherObj, GameCollisionObject.objectIdx++);
-        
-        let i1 = GameCollisionObject.objectMapping.get(obj);
-        let i2 = GameCollisionObject.objectMapping.get(otherObj);
-        
-        let iLst = [i1, i2];
-        iLst.sort();
-        
-        if(!(iLst in GameCollisionObject.collisions)) GameCollisionObject.collisions[iLst] = [obj, otherObj, boundIdx, time];
+        this._collisions.length = 0;
     }
 }
 
-GameCollisionObject.objectIdx = 0;
-GameCollisionObject.objectMapping = new Map();
-GameCollisionObject.collisions = {};
-GameCollisionObject.finalPassDone = false;
-GameCollisionObject.sideNames = ["bottom", "top", "right", "left"];
-GameCollisionObject.sideSigns = [-1, 1, -1, 1];
-GameCollisionObject.sideSwaps = [1, 0, 3, 2];
-
-window.GameCollisionObject = GameCollisionObject;
+GameCollisionManager.sideNames = ["bottom", "top", "right", "left"];
+GameCollisionManager.sideSigns = [-1, 1, -1, 1];
+GameCollisionManager.sideSwaps = [1, 0, 3, 2];
 
 /*
  * CHUNK MANAGEMENT FUNCTIONS:
@@ -1217,7 +1265,7 @@ function _saveLevelCode(filename, levelData) {
 
 function _reboundEntity(entity, chunkSize, numChunks) {
     let [cBoundX, cBoundY] = numChunks;
-    let [ex, ey, ew, eh] = entity.getHitBox();
+    let [ex, ey, ew, eh] = entity.getBoundingBox();
     [ex, ey] = [_bound(ex, 0, (cBoundX * chunkSize) - ew), _bound(ey, 0, (cBoundY * chunkSize) - eh)];
     entity.setLocation([ex, ey]);
     return [ex, ey];
@@ -1252,6 +1300,8 @@ function _handleCollisions(loadedChunks, chunkLookup, chunkSize, numChunks, play
     }
     
     let divmod = (x, y) => [Math.floor(x / y), Math.floor(x % y)];
+    
+    let collisionManager = new GameCollisionManager();
             
     // Going over every entity in every loaded chunk...
     for(let ci = 0; ci < loadedChunks.length; ci++) {
@@ -1286,12 +1336,8 @@ function _handleCollisions(loadedChunks, chunkLookup, chunkSize, numChunks, play
                         // If block is not null, perform collision check with entity...
                         let [x2, y2, w2, h2] = block.__getFullCollisionBox();
                         
-                        if(
-                            !((x2 >= (x1 + w1)) || ((x2 + w2) <= x1)) // If we collide on x-values
-                            && !((y2 >= (y1 + h1)) || ((y2 + h2) <= y1)) // and y values... (boxes overlap).
-                        ) {
-                            if("onCollision" in entity1) entity1.onCollision(block);
-                            if("onCollision" in block) block.onCollision(entity1);
+                        if(collisionManager.__insideCheck([x1, y1, w1, h1], [x2, y2, w2, h2])) {
+                            collisionManager.addCollision(entity1, block);
                         }
                     }
                 }
@@ -1308,17 +1354,15 @@ function _handleCollisions(loadedChunks, chunkLookup, chunkSize, numChunks, play
                     let [x2, y2, w2, h2] = entity2.__getFullCollisionBox();
                     
                     // Collision checks....
-                    if(
-                        !((x2 >= (x1 + w1)) || ((x2 + w2) <= x1)) // If we collide on x-values
-                        && !((y2 >= (y1 + h1)) || ((y2 + h2) <= y1)) // and y values... (boxes overlap).
-                    ) {                            
-                        if("onCollision" in entity1) entity1.onCollision(entity2);
-                        if("onCollision" in entity2) entity2.onCollision(entity1)
+                    if(collisionManager.__insideCheck([x1, y1, w1, h1], [x2, y2, w2, h2])) {                            
+                        collisionManager.addCollision(entity1, entity2);
                     }
                 }
             }
         }
     }
+    
+    collisionManager.resolveCollisions();
     
     for(let [cx, cy, chunk] of loadedChunks) {
         for(let blockCol of chunk.blocks) {
@@ -1348,8 +1392,8 @@ function _buildCamerasFrom(canvas, cameraConfig, players) {
         let {
             blockSize = 32,
             minBlocksShown = 10,
-            maxBlocksShown = 16,
-            maxZoomAdjustment = 0.5,
+            maxBlocksShown = 20,
+            maxZoomAdjustment = 1.5,
             trackBox = [1/3, 1/3, 1/3, 1/3],
             subCanvasBox = [0, 0, 1, 1],
             tracks = range(players.length)
@@ -1574,7 +1618,7 @@ class Zone {
             let [cx, cy, cw, ch] = camera.getBounds();
             
             for(let object of drawObjects) {
-                let [ox, oy, ow, oh] = object.getHitBox();
+                let [ox, oy, ow, oh] = object.getBoundingBox();
                 if(
                     !((ox >= (cx + cw)) || ((ox + ow) <= cx))
                     && !((oy >= (cy + ch)) || ((oy + oh) <= cy)) 
@@ -1658,7 +1702,7 @@ elem_proto.levelEditor = async function(gameInfo, editZone) {
         for(let i = 0; i < loadedChunk.entities.length; i++) {
             let entity = loadedChunk.entities[i];
             
-            let [x, y, w, h] = entity.getHitBox();
+            let [x, y, w, h] = entity.getBoundingBox();
             if((blockX > x) && (blockY > y) && (blockX < x + w) && (blockY < y + h)) {
                 _popAndSwapWithEnd(loadedChunk.entities, i);
                 return true;
@@ -1680,7 +1724,7 @@ elem_proto.levelEditor = async function(gameInfo, editZone) {
     
     function _deletePlayer(blockX, blockY, gameState) {
         for(let i = 0; i < gameState.zone.zoneData.players.length; i++) {
-            let [x, y, w, h] = gameState.zone.zoneData.players[i].getHitBox();
+            let [x, y, w, h] = gameState.zone.zoneData.players[i].getBoundingBox();
             
             if((blockX > x) && (blockY > y) && (blockX < x + w) && (blockY < y + h)) {
                 _popAndSwapWithEnd(gameState.zone.zoneData.players, i);
@@ -2043,6 +2087,19 @@ elem_proto.levelEditor = async function(gameInfo, editZone) {
         gameState.clickWasDown = gameState.mouse.pressed;
     }
     
+    function drawHitBoxesOf(camera, painter, object) {
+        painter.strokeStyle = "red";
+        let boxes = object.getHitBoxes();
+        
+        for(let box of boxes) 
+            painter.strokeRect(...camera.transformBox(box));
+        
+        if(boxes.length > 1) {
+            painter.strokeStyle = "pink";
+            painter.strokeRect(...camera.transformBox(object.getBoundingBox()));
+        }
+    }
+    
     function draw(canvas, painter, gameState) {    
         // Clear the canvas...
         painter.fillStyle = "white"
@@ -2070,15 +2127,21 @@ elem_proto.levelEditor = async function(gameInfo, editZone) {
         
         if(gameState.__levelShowHitboxes) {
             for(let [x, y, chunk] of gameState.loadedChunks) {
+                for(let blockCol of chunk.blocks) {
+                    for(let block of blockCol) {
+                        if(block == null) continue;
+                        if(!Object.getPrototypeOf(block).hasOwnProperty("getHitBoxes")) continue;
+                        drawHitBoxesOf(gameState.cameras[0], painter, block);
+                    }
+                }
+                
                 for(let entity of chunk.entities) {                
-                    painter.strokeStyle = "red";
-                    painter.strokeRect(...gameState.cameras[0].transformBox(entity.getHitBox()));
+                    drawHitBoxesOf(gameState.cameras[0], painter, entity);
                 }
             }
             
             for(let player of gameState.zone.zoneData.players) {
-                painter.strokeStyle = "red";
-                painter.strokeRect(...gameState.cameras[0].transformBox(player.getHitBox()));
+                drawHitBoxesOf(gameState.cameras[0], painter, player);
             }
         }
                 

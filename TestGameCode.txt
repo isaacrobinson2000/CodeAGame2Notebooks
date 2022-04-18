@@ -96,8 +96,8 @@ class Tree extends GameObject {
         this._sprite.draw(painter, cx, cy, cw, ch);
     }
     
-    getHitBox() {
-        return [this.x, this.y, 5, 4]
+    getHitBoxes() {
+        return [[this.x, this.y, 5, 4]];
     }
     
     getZOrder() {
@@ -145,6 +145,11 @@ class Player extends GameCollisionObject {
         this._fric_facx = 0.915;
         this._fric_facy = 0.999;
         this._waitTime = 0;
+        
+        this._collisionSides = [
+            {"top": true, "left": true, "right": true, "bottom": true},
+            {"top": true, "left": true, "right": true}
+        ];
         
         this._hp = 5;
         
@@ -230,7 +235,7 @@ class Player extends GameCollisionObject {
 
         if(side == "inside") return;
         if(side == "bottom") {
-            this._numJumps = Infinity;
+            this._numJumps = 2;
             if(this._sprite.getAnimation() == "jump") this._sprite.setAnimation("stand");
             if(obj instanceof Enemy) this._vy = -this._vy;
             else this._vy = 0;
@@ -245,9 +250,14 @@ class Player extends GameCollisionObject {
         }
     }
     
-    getHitBox() {
+    getHitBoxes() {
         let [xi, yi, wi, hi] = this._inset;
-        return [this.x, this.y, wi, hi];
+        let box2 = (this._sprite.isHorizontallyFlipped())? [this.x, this.y, 8 / 32, 9 / 32]: [this.x + wi - 8 / 32, this.y, 8 / 32, 9 / 32];
+        
+        return [
+            [this.x, this.y + 9 / 32, wi, hi - 9 / 32],
+            box2
+        ];
     }
 }
 
@@ -344,9 +354,9 @@ class Enemy extends GameCollisionObject {
         this._sprite.draw(painter, cx, cy, cw, ch);
     }
     
-    getHitBox() {
+    getHitBoxes() {
         let [xi, yi, wi, hi] = this._inset;
-        return [this.x, this.y, wi, hi];
+        return [[this.x, this.y, wi, hi]];
     }
 }
 
@@ -385,7 +395,7 @@ class Ball extends GameCollisionObject {
     }
     
     draw(canvas, painter, camera) {
-        let [cx, cy, cw, ch] = camera.transformBox(this.getHitBox());
+        let [cx, cy, cw, ch] = camera.transformBox(this.getBoundingBox());
         this._sprite.draw(painter, cx, cy, cw, ch);
     }
     
@@ -448,8 +458,8 @@ class WaterTop extends GameCollisionObject {
             obj._numJumps = 2;
         }
         // Compute the boyant force... and add it onto the objects velocity...
-        let [wx, wy, ww, wh] = this.getHitBox();
-        let [ox, oy, ow, oh] = obj.getHitBox();
+        let [wx, wy, ww, wh] = this.getBoundingBox();
+        let [ox, oy, ow, oh] = obj.getBoundingBox();
 
         let yIn = Math.min(Math.abs((wy + wh) - oy), Math.abs((oy + oh) - wy));
         let xIn = Math.min(Math.abs((wx + ww) - ox), Math.abs((ox + ow) - wx))
@@ -460,8 +470,8 @@ class WaterTop extends GameCollisionObject {
         return false;
     }
     
-    getHitBox() {
-        return [this.x, this.y + 0.25, 1, 0.75]
+    getHitBoxes() {
+        return [[this.x, this.y + 0.25, 1, 0.75]];
     }
     
     getZOrder() {
@@ -482,7 +492,7 @@ class Water extends GameCollisionObject {
     }
     
     draw(canvas, painter, camera) {
-        let [cx, cy, cw, ch] = camera.transformBox(this.getHitBox());
+        let [cx, cy, cw, ch] = camera.transformBox(this.getBoundingBox());
         this._sprite.draw(painter, cx, cy, cw, ch);
     }
     
@@ -497,8 +507,8 @@ class Water extends GameCollisionObject {
             obj._numJumps = 2;
         }
         // Compute the boyant force... and add it onto the objects velocity...
-        let [wx, wy, ww, wh] = this.getHitBox();
-        let [ox, oy, ow, oh] = obj.getHitBox();
+        let [wx, wy, ww, wh] = this.getBoundingBox();
+        let [ox, oy, ow, oh] = obj.getBoundingBox();
         
         let yIn = Math.min(Math.abs((wy + wh) - oy), Math.abs((oy + oh) - wy));
         let xIn = Math.min(Math.abs((wx + ww) - ox), Math.abs((ox + ow) - wx))
@@ -602,7 +612,7 @@ let gameInfo = {
                         "speed": 50
                     },
                     "top": {
-                        "frames": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16],
+                        "frames": range(1, 17),
                         "speed": 50
                     }
                 }
