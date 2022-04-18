@@ -517,14 +517,13 @@ class Camera {
             }
         }
         
-        this._centerPoint = [trackBox[0] + trackBox[2] / 2, trackBox[1] + trackBox[3] / 2];
+        [cx, cy, cw, ch] = this.getBounds();
+        this._centerPoint = [trackBox[0] + (0.5 - this._trackBox[0]) * cw, trackBox[1] + (0.5 - this._trackBox[1]) * ch];
             
         // Bound the camera based on the level bounds...
         [cx, cy, cw, ch] = this.getBounds();
         let [xOut, yOut] = [this._centerPoint[0] - cx, this._centerPoint[1] - cy];
-        
         let [newCx, newCy] = [_bound(cx, 0, levelBounds[0] - cw), _bound(cy, 0, levelBounds[1] - ch)];
-        
         this._centerPoint = [newCx + xOut, newCy + yOut];
     }
     
@@ -610,6 +609,7 @@ elem_proto.makeBaseGame = async function(gameLoop, gameState = {}, assets = {}, 
     gameState.assets = {};
     gameState.assets.sprites = {};
     gameState.assets.sounds = {};
+    gameState.assets.flags = assets.flags ?? {};
     gameState.zones = {};
     
     let doc = $(document);

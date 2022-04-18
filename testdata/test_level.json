@@ -19857,7 +19857,11 @@
                         null,
                         null,
                         null,
-                        null,
+                        {
+                            "_$type": "EndGame",
+                            "x": 91,
+                            "y": 27
+                        },
                         {
                             "_$type": "WaterTop",
                             "x": 91,
@@ -19891,7 +19895,11 @@
                         null,
                         null,
                         null,
-                        null,
+                        {
+                            "_$type": "EndGame",
+                            "x": 92,
+                            "y": 27
+                        },
                         {
                             "_$type": "WaterTop",
                             "x": 92,
@@ -19925,7 +19933,11 @@
                         null,
                         null,
                         null,
-                        null,
+                        {
+                            "_$type": "EndGame",
+                            "x": 93,
+                            "y": 27
+                        },
                         {
                             "_$type": "WaterTop",
                             "x": 93,
@@ -19959,7 +19971,11 @@
                         null,
                         null,
                         null,
-                        null,
+                        {
+                            "_$type": "EndGame",
+                            "x": 94,
+                            "y": 27
+                        },
                         {
                             "_$type": "WaterTop",
                             "x": 94,
@@ -19993,7 +20009,11 @@
                         null,
                         null,
                         null,
-                        null,
+                        {
+                            "_$type": "EndGame",
+                            "x": 95,
+                            "y": 27
+                        },
                         {
                             "_$type": "WaterTop",
                             "x": 95,
@@ -23179,20 +23199,76 @@
                     [
                         null,
                         null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null
+                        {
+                            "_$type": "EndGame",
+                            "x": 109,
+                            "y": 2
+                        },
+                        {
+                            "_$type": "EndGame",
+                            "x": 109,
+                            "y": 3
+                        },
+                        {
+                            "_$type": "EndGame",
+                            "x": 109,
+                            "y": 4
+                        },
+                        {
+                            "_$type": "EndGame",
+                            "x": 109,
+                            "y": 5
+                        },
+                        {
+                            "_$type": "EndGame",
+                            "x": 109,
+                            "y": 6
+                        },
+                        {
+                            "_$type": "EndGame",
+                            "x": 109,
+                            "y": 7
+                        },
+                        {
+                            "_$type": "EndGame",
+                            "x": 109,
+                            "y": 8
+                        },
+                        {
+                            "_$type": "EndGame",
+                            "x": 109,
+                            "y": 9
+                        },
+                        {
+                            "_$type": "EndGame",
+                            "x": 109,
+                            "y": 10
+                        },
+                        {
+                            "_$type": "EndGame",
+                            "x": 109,
+                            "y": 11
+                        },
+                        {
+                            "_$type": "EndGame",
+                            "x": 109,
+                            "y": 12
+                        },
+                        {
+                            "_$type": "EndGame",
+                            "x": 109,
+                            "y": 13
+                        },
+                        {
+                            "_$type": "EndGame",
+                            "x": 109,
+                            "y": 14
+                        },
+                        {
+                            "_$type": "EndGame",
+                            "x": 109,
+                            "y": 15
+                        }
                     ],
                     [
                         null,
@@ -23247,7 +23323,11 @@
                         null,
                         null,
                         null,
-                        null,
+                        {
+                            "_$type": "EndGame",
+                            "x": 96,
+                            "y": 27
+                        },
                         {
                             "_$type": "WaterTop",
                             "x": 96,
@@ -23281,7 +23361,11 @@
                         null,
                         null,
                         null,
-                        null,
+                        {
+                            "_$type": "EndGame",
+                            "x": 97,
+                            "y": 27
+                        },
                         {
                             "_$type": "WaterTop",
                             "x": 97,
@@ -23315,7 +23399,11 @@
                         null,
                         null,
                         null,
-                        null,
+                        {
+                            "_$type": "EndGame",
+                            "x": 98,
+                            "y": 27
+                        },
                         {
                             "_$type": "WaterTop",
                             "x": 98,
@@ -23349,7 +23437,11 @@
                         null,
                         null,
                         null,
-                        null,
+                        {
+                            "_$type": "EndGame",
+                            "x": 99,
+                            "y": 27
+                        },
                         {
                             "_$type": "WaterTop",
                             "x": 99,
@@ -23383,7 +23475,11 @@
                         null,
                         null,
                         null,
-                        null,
+                        {
+                            "_$type": "EndGame",
+                            "x": 100,
+                            "y": 27
+                        },
                         {
                             "_$type": "WaterTop",
                             "x": 100,
@@ -23417,7 +23513,11 @@
                         null,
                         null,
                         null,
-                        null,
+                        {
+                            "_$type": "EndGame",
+                            "x": 101,
+                            "y": 27
+                        },
                         {
                             "_$type": "WaterTop",
                             "x": 101,
@@ -23451,7 +23551,11 @@
                         null,
                         null,
                         null,
-                        null,
+                        {
+                            "_$type": "EndGame",
+                            "x": 102,
+                            "y": 27
+                        },
                         {
                             "_$type": "WaterTop",
                             "x": 102,
@@ -23485,7 +23589,11 @@
                         null,
                         null,
                         null,
-                        null,
+                        {
+                            "_$type": "EndGame",
+                            "x": 103,
+                            "y": 27
+                        },
                         {
                             "_$type": "WaterTop",
                             "x": 103,
@@ -23519,7 +23627,11 @@
                         null,
                         null,
                         null,
-                        null,
+                        {
+                            "_$type": "EndGame",
+                            "x": 104,
+                            "y": 27
+                        },
                         {
                             "_$type": "WaterTop",
                             "x": 104,
@@ -23553,7 +23665,11 @@
                         null,
                         null,
                         null,
-                        null,
+                        {
+                            "_$type": "EndGame",
+                            "x": 105,
+                            "y": 27
+                        },
                         {
                             "_$type": "WaterTop",
                             "x": 105,
@@ -23587,7 +23703,11 @@
                         null,
                         null,
                         null,
-                        null,
+                        {
+                            "_$type": "EndGame",
+                            "x": 106,
+                            "y": 27
+                        },
                         {
                             "_$type": "WaterTop",
                             "x": 106,
@@ -23621,7 +23741,11 @@
                         null,
                         null,
                         null,
-                        null,
+                        {
+                            "_$type": "EndGame",
+                            "x": 107,
+                            "y": 27
+                        },
                         {
                             "_$type": "WaterTop",
                             "x": 107,
@@ -23655,7 +23779,11 @@
                         null,
                         null,
                         null,
-                        null,
+                        {
+                            "_$type": "EndGame",
+                            "x": 108,
+                            "y": 27
+                        },
                         {
                             "_$type": "WaterTop",
                             "x": 108,
@@ -23678,18 +23806,66 @@
                         }
                     ],
                     [
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
+                        {
+                            "_$type": "EndGame",
+                            "x": 109,
+                            "y": 16
+                        },
+                        {
+                            "_$type": "EndGame",
+                            "x": 109,
+                            "y": 17
+                        },
+                        {
+                            "_$type": "EndGame",
+                            "x": 109,
+                            "y": 18
+                        },
+                        {
+                            "_$type": "EndGame",
+                            "x": 109,
+                            "y": 19
+                        },
+                        {
+                            "_$type": "EndGame",
+                            "x": 109,
+                            "y": 20
+                        },
+                        {
+                            "_$type": "EndGame",
+                            "x": 109,
+                            "y": 21
+                        },
+                        {
+                            "_$type": "EndGame",
+                            "x": 109,
+                            "y": 22
+                        },
+                        {
+                            "_$type": "EndGame",
+                            "x": 109,
+                            "y": 23
+                        },
+                        {
+                            "_$type": "EndGame",
+                            "x": 109,
+                            "y": 24
+                        },
+                        {
+                            "_$type": "EndGame",
+                            "x": 109,
+                            "y": 25
+                        },
+                        {
+                            "_$type": "EndGame",
+                            "x": 109,
+                            "y": 26
+                        },
+                        {
+                            "_$type": "EndGame",
+                            "x": 109,
+                            "y": 27
+                        },
                         {
                             "_$type": "WaterTop",
                             "x": 109,
