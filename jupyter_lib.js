@@ -175,7 +175,7 @@ class Sound {
             this.ALL_SOUNDS[i].stop();
         }
     }
-
+    
     /**
      * Unmute all sound effects, starting them if they are background music...
      */
@@ -689,6 +689,11 @@ elem_proto.makeBaseGame = async function(gameLoop, gameState = {}, assets = {}, 
         if(gameState.keepRunning) {
             window.requestAnimationFrame(loopManager);
         }
+        else {
+            Sound.muteAll();
+            Sound.ALL_SOUNDS = [];
+            Sound.unmuteAll();
+        }
     };
     
     // Mouse support....
@@ -727,6 +732,7 @@ elem_proto.makeBaseGame = async function(gameLoop, gameState = {}, assets = {}, 
     win.on("blur.gameloop", (event) => {
         gameState.lastTimeStamp = null;
         gameState.paused = true;
+        Sound.muteAll();
         // Manually run the game loop to allow the game to handle the pause...
         // This handles cases where the user has switched tabs, which causes the game loop to
         // pause execution immediately.
@@ -735,6 +741,7 @@ elem_proto.makeBaseGame = async function(gameLoop, gameState = {}, assets = {}, 
 
     win.on("focus.gameloop", (event) => {
         gameState.paused = false;
+        Sound.unmuteAll();
     });
     
     // Start the game loop.
@@ -2360,17 +2367,35 @@ elem_proto.makeGame = async function(gameInfo, entryZone, cameraSpec = null) {
         let [command, arg, cameraInfo] = globalGameState.__zoneStackAction;
         
         if(command == "push") {
+            if(globalGameState.__zoneStack.length > 0) {
+                Sound.muteAll();
+                let belowGameState = globalGameState.__zoneStack[globalGameState.__zoneStack.length - 1][1];
+                belowGameState.__soundsToRestore = Sound.ALL_SOUNDS;
+                Sound.ALL_SOUNDS = [];
+                Sound.unmuteAll();
+            }
+            
             let newZone = globalGameState.zones[arg].buildZone(cameraInfo);
             let subGameState = {zoneName: arg};
             globalGameState.__zoneStack.push([newZone, subGameState]);
         }
         else if(command == "pop") {
+            Sound.muteAll();
             globalGameState.__zoneStack.pop();
+            Sound.ALL_SOUNDS = [];
+            
             if(arg != null) {
                 let newZone = globalGameState.zones[arg].buildZone(cameraInfo);
                 let subGameState = {zoneName: arg};
                 globalGameState.__zoneStack.push([newZone, subGameState]);
             }
+            else if(globalGameState.__zoneStack.length > 0) {
+                let belowGameState = globalGameState.__zoneStack[globalGameState.__zoneStack.length - 1][1];
+                Sound.ALL_SOUNDS = belowGameState.__soundsToRestore;
+                belowGameState.__soundsToRestore = null;
+            }
+            
+            Sound.unmuteAll();
         }
         
         globalGameState.__zoneStackAction = [null, null, null];

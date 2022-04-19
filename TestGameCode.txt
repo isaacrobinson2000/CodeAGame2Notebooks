@@ -147,6 +147,8 @@ class Player extends GameCollisionObject {
         this._waitTime = 0;
         this._accept_inputs = true;
         
+        this._hit_sound = assets.sounds.hit.buildSound();
+        
         this._collisionSides = [
             {"top": true, "left": true, "right": true, "bottom": true},
             {"top": true, "left": true, "right": true}
@@ -242,16 +244,21 @@ class Player extends GameCollisionObject {
         if(side == "bottom") {
             this._numJumps = 2;
             if(this._sprite.getAnimation() == "jump") this._sprite.setAnimation("stand");
-            if(obj instanceof Enemy) this._vy = -this._vy;
+            if(obj instanceof Enemy) {
+                this._hit_sound.play();
+                this._vy = -this._vy;
+            }
             else this._vy = 0;
         }
         else if(obj instanceof Enemy && this._waitTime <= 0) {
+            this._hit_sound.play();
             this._hp -= 2;
             this._waitTime = 1000;
         }
         
         if(side == "left" || side == "right") {
             if(!(obj instanceof Ball)) this._vx = 0;
+            else this._hit_sound.play();
         }
     }
     
@@ -581,6 +588,9 @@ const INTRO_LENGTH = 4 * 1000;
 const FADEIN = 3 * 1000;
 const INTRO_SPEED = [0, 10 / 1000];
 
+const SOUND_GAP = 5 * 1000;
+const RANDOM_SOUND_CHANCE = 10;
+
 let gameInfo = {
     objects: {
         blocks: [GameBlock, GameBlock2, Tree, Grass, LogBlock, WaterTop, Water, EndGame],
@@ -679,6 +689,27 @@ let gameInfo = {
                 }
             }
         },
+        sounds: {
+            "wave0": {
+                "source": "sounds/wave1.wav",
+                "volume": 0.5
+            },
+            "wave1": {
+                "source": "sounds/wave2.wav",
+                "volume": 0.5
+            },
+            "wave2": {
+                "source": "sounds/wave3.wav",
+                "volume": 0.5
+            },
+            "noise": {
+                "source": "sounds/noise.wav",
+                "background": true
+            },
+            "hit": {
+                "source": "sounds/hit.wav"
+            }
+        }
     },
     zones: {
         test: {
@@ -724,6 +755,27 @@ let gameInfo = {
                     if(gameState._beginGameCounter <= 0) {
                         gameState.__players[0]._accept_inputs = true;
                         gameState._beginGameCounter = null;
+                    }
+                }
+                
+                if(gameState.soundCounter > 0) {
+                    gameState.soundCounter -= timeStep;
+                }
+                else {
+                    if(gameState.waves == null) {
+                        gameState.assets.sounds.noise.buildSound().play();
+                        gameState.waves = [];
+                        for(let name in gameState.assets.sounds) {
+                            if(name.startsWith("wave")) {
+                                gameState.waves.push(gameState.assets.sounds[name].buildSound());
+                            }
+                        }
+                    }
+                    
+                    if(Math.floor(Math.random() * RANDOM_SOUND_CHANCE) == 0) {
+                        let sound = gameState.waves[Math.floor(Math.random() * gameState.waves.length)];
+                        sound.play();
+                        gameState.soundCounter = SOUND_GAP;
                     }
                 }
                 
