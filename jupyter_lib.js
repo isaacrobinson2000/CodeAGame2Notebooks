@@ -4,7 +4,9 @@ let elem_proto = null;
 try {
     elem_proto = Object.getPrototypeOf(element);
 } catch(exp) {
-    elem_proto = {};
+    let element = {};
+    elem_proto = element;
+    window.element = element;
 }
 
 elem_proto.println = function(obj){
@@ -656,7 +658,7 @@ elem_proto.makeBaseGame = async function(gameLoop, gameState = {}, assets = {}, 
             loadBar.prop("value", loadBar.prop("value") + 1);
         } catch(exp) {
             if(levelGen == null) {
-                loadTxt.text("Error: Unable to load zone " + zone + ", because '" + exp + "'");
+                loadTxt.text("Error: Unable to load zone " + zoneName + ", because '" + exp + "'");
                 throw exp;
             }
             else {
@@ -749,7 +751,10 @@ elem_proto.makeBaseGame = async function(gameLoop, gameState = {}, assets = {}, 
 };
 
 
-let _kernel = IPython.notebook.kernel;
+let _kernel;
+try {
+    _kernel = IPython.notebook.kernel;
+} catch(exp) {}
 
 function runPython(code) {
     return new Promise(function(resolve, reject) {
