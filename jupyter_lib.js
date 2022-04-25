@@ -244,6 +244,7 @@ class Sprite {
         this._speed = 16;
         this._frames = range(0, this._numImages);
         this._cycles = Infinity;
+        this._inset = [0, 0, this._width, this._height];
         
         this._index = 0;
         this._accumulator = 0;
@@ -263,6 +264,7 @@ class Sprite {
         this._speed = ((anim.speed == null) || (anim.speed < 1))? 16: anim.speed;
         this._frames = anim.frames ?? range(0, this._numImages);
         this._cycles = ((anim.cycles == null) || (anim.cycles < 0))? Infinity: anim.cycles;
+        this._inset = ((Array.isArray(anim.inset)) && (anim.inset.length == 4))? anim.inset: [0, 0, this._width, this._height];
         
         for(let i = 0; i < this._frames.length; i++) {
             this._frames[i] = Math.abs(this._frames[i]) % this._numImages;
@@ -301,6 +303,22 @@ class Sprite {
         return this._height;
     }
     
+    get cycles() {
+        return this._cycles;
+    }
+    
+    get inset() {
+        return this._inset;
+    }
+    
+    get frames() {
+        return this._frames;
+    }
+    
+    get speed() {
+        return this._speed;
+    }
+    
     update(timeDelta) {
         this._accumulator += timeDelta;
         
@@ -322,10 +340,15 @@ class Sprite {
         let imgIdx = this._frames[this._index];
         let xin = this._width * imgIdx;
         
+        let outsetW = (this._width / this._inset[2]) * width;
+        let outsetH = (this._height / this._inset[3]) * height;
+        let outsetX = x - (this._inset[0] / this._width) * outsetW;
+        let outsetY = y - (this._inset[1] / this._height) * outsetH;
+        
         ctx.save();
-        ctx.translate((this._horiz_flip)? x + width: x, (this._vert_flip)? y + height: y);
+        ctx.translate((this._horiz_flip)? outsetX + outsetW: outsetX, (this._vert_flip)? outsetY + outsetH: outsetY);
         ctx.scale(this._horiz_flip? -1: 1, this._vert_flip? -1: 1);
-        ctx.drawImage(this._img, xin, 0, this._width, this._height, 0, 0, width, height);
+        ctx.drawImage(this._img, xin, 0, this._width, this._height, 0, 0, outsetW, outsetH);
         ctx.restore();
     }
 }
