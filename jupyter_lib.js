@@ -602,6 +602,7 @@ elem_proto.makeBaseGame = async function(gameLoop, gameState = {}, assets = {}, 
     gameState.canvas = newCanvas[0];
     gameState.painter = gameState.canvas.getContext("2d");
     gameState.keysPressed = {};
+    gameState.gamepads = [];
     gameState.mouse = {
         pressed: false,
         location: [0, 0]
@@ -679,6 +680,10 @@ elem_proto.makeBaseGame = async function(gameLoop, gameState = {}, assets = {}, 
         gameState.painter.mozImageSmoothingEnabled = false; 
         gameState.painter.webkitImageSmoothingEnabled = false; 
         gameState.painter.msImageSmoothingEnabled = false; 
+        
+        if("getGamepads" in navigator) {
+            gameState.gamepads = navigator.getGamepads();
+        }
         
         if(gameState.paused) gameState.lastTimeStamp = null;
         
@@ -939,9 +944,162 @@ class GameCollisionObject extends GameObject {
 
 window.GameCollisionObject = GameCollisionObject;
 
+class CollisionHeap {
+    constructor() {
+        this._array = [];
+        this._box2indexes = new Map();
+        this._objects = new Map();
+        this._objectCounter = 0;
+    }
+    
+    _swap(index1, index2) {
+        // Swap array values....
+        let tmp = this._array[index1];
+        this._array[index1] = this._array[index2];
+        this._array[index2] = tmp;
+        
+        // Update the box mapping to point to the correct heap indicies...
+        let [obj1, obj2, bestBoundIdx, bestTime, i, j] = this._array[index1];
+        this._set_mapping(obj1, i, obj2, j, index1);
+        
+        [obj1, obj2, bestBoundIdx, bestTime, i, j] = this._array[index2];
+        this._set_mapping(obj1, i, obj2, j, index2);
+    }
+    
+    _sink(index) {        
+        while(true) {
+            let child1Idx = index * 2 + 1;
+            let child2Idx = index * 2 + 2;
+            let val1 = this._array[child1Idx];
+            let val2 = this._array[child2Idx];
+            val1 = (val1 == undefined)? val1: val1[3];
+            val2 = (val2 == undefined)? val2: val2[3];
+            
+            if(val1 == undefined && val2 == undefined) return;
+            let smallerIdx = (val2 == undefined || val1 < val2)? child1Idx: child2Idx;
+            
+            if(this._array[index][3] < this._array[smallerIdx][3]) return;
+            this._swap(index, smallerIdx);
+            index = smallerIdx;
+        }
+    }
+    
+    _swim(index) {
+        while(true) {
+            if(index <= 0) return;
+            
+            let parent = Math.floor((index - 1) / 2);
+            if(this._array[parent][3] < this._array[index][3]) return;
+            this._swap(index, parent);
+            index = parent;
+        }
+    }
+    
+    _to_idx(obj, boxIdx) {
+        return this._objects.get(obj) + "," + boxIdx;
+    }
+    
+    _set_mapping(obj1, i, obj2, j, value) {
+        let idx1 = this._to_idx(obj1, i);
+        let idx2 = this._to_idx(obj2, j);
+        
+        if(!this._box2indexes.has(idx1)) this._box2indexes.set(idx1, new Map());
+        if(!this._box2indexes.has(idx2)) this._box2indexes.set(idx2, new Map());
+        
+        this._box2indexes.get(idx1).set(idx2, value);
+        this._box2indexes.get(idx2).set(idx1, value);
+    }
+    
+    _delete_mapping(obj1, i, obj2, j, value) {
+        let idx1 = this._to_idx(obj1, i);
+        let idx2 = this._to_idx(obj2, j);
+        
+        this._box2indexes.get(idx1).delete(idx2);
+        this._box2indexes.get(idx2).delete(idx1);
+        
+        if(this._box2indexes.get(idx1).size == 0) {
+            this._box2indexes.delete(idx1);
+            this._objects.delete(obj1);
+        }
+        if(this._box2indexes.get(idx2).size == 0) {
+            this._box2indexes.delete(idx2);
+            this._objects.delete(obj2);
+        }
+    }
+    
+    push(collisionInfoList) {
+        let [obj1, obj2, bestBoundIdx, bestTime, i, j] = collisionInfoList;
+        
+        if(!this._objects.has(obj1)) this._objects.set(obj1, this._objectCounter++);
+        if(!this._objects.has(obj2)) this._objects.set(obj2, this._objectCounter++);
+        
+        // Add value to the heap...
+        this._array.push(collisionInfoList);
+        let heapIdx = this._array.length - 1;
+        
+        this._set_mapping(obj1, i, obj2, j, heapIdx);
+        this._swim(heapIdx);
+    }
+    
+    peek() {
+        return this._array[0];
+    }
+    
+    pop() {
+        let result = this.peek();
+        if(result == undefined) return result;
+        
+        this._swap(0, this._array.length - 1);
+        this._delete_mapping(result[0], result[4], result[1], result[5]);
+        this._array.length--;
+        
+        this._sink(0);
+        
+        return result;
+    }
+    
+    update(collisionInfoList) {
+        let [obj1, obj2, bestBoundIdx, bestTime, i, j] = collisionInfoList;
+        
+        let idx1 = this._to_idx(obj1, i);
+        let idx2 = this._to_idx(obj2, j);
+        
+        let heapLocation = this._box2indexes.get(obj1).get(obj2);
+        let origT = this._array[heapLocation][3];
+        this._array[heapLocation] = collisionInfoList;
+        
+        if(bestTime > origT) {
+            this._sink(heapLocation);
+        }
+        else {
+            this._swim(heapLocation);
+        }
+    }
+    
+    *getNeighborsOf(obj) {
+        if(!this._box2indexes.has(obj)) return;
+        
+        for(let [obj, idx] of this._box2indexes.get(obj)) {
+            yield [obj, this._array[idx]];
+        }
+    }
+    
+    get size() {
+        return this._array.length;
+    }
+    
+    clear() {
+        this._array.length = 0;
+        this._objects.clear();
+        this._box2indexes.clear();
+        this._objectCounter = 0;
+    }
+}
+
 class GameCollisionManager {
     constructor() {
-        this._collisions = [];
+        this._collisions = new CollisionHeap();
+        this._unknowns = [];
     }
     
     __intersection(boxSeg, dvec, boxSeg2, dvec2, ignoreT = false) {
@@ -1058,7 +1216,45 @@ class GameCollisionManager {
                     if(bestTime != Infinity) {
                         this._collisions.push([obj1, obj2, bestBoundIdx, bestTime, i, j]);
                     }
+                    else {
+                        this._unknowns.push([obj1, obj2, i, j]);
+                    }
                 }
+            }
+        }
+    }
+    
+    _flushUnkowns() {
+        for(let k = 0; k < this._unknowns.length;) {
+            let [obj1, obj2, il, jl] = this._unknowns[k];
+            
+            let obj1Vec = obj1.__getDisplacementVector();
+            let obj2Vec = obj2.__getDisplacementVector();
+            let obj1Sides = this.__getCollisionSides([obj1.getHitBoxes()[il]], obj1Vec, this._colSidesAt(obj1._collisionSides, il))[0];
+            let obj2Sides = this.__getCollisionSides([obj2.getHitBoxes()[jl]], obj2Vec, this._colSidesAt(obj2._collisionSides, jl))[0];
+            
+            obj2Sides = obj2Sides.map((e, i, a) => a[GameCollisionManager.sideSwaps[i]])
+            
+            let bestTime = Infinity;
+            let bestBoundIdx = null;
+
+            for(let k = 0; k < obj2Sides.length; k++) {
+                if((obj2Sides[k] == null) || (obj1Sides[k] == null)) continue;
+                
+                let [time, overlap, bound] = this.__intersection(obj1Sides[k], obj1Vec, obj2Sides[k], obj2Vec, true);
+
+                if(bestTime > time) {
+                    bestTime = time;
+                    bestBoundIdx = k;
+                }
+            }
+            
+            if(bestTime != Infinity) {
+                this._collisions.push([obj1, obj2, bestBoundIdx, bestTime, il, jl]);
+                _popAndSwapWithEnd(this._unknowns, k);
+            }
+            else {
+                k++;
             }
         }
     }
@@ -1067,13 +1263,28 @@ class GameCollisionManager {
         return (Array.isArray(collisionSides))? collisionSides[idx]: collisionSides;
     }
     
-    resolveCollisions() {
-        this._collisions.sort((a, b) => a[3] - b[3]);
+    _updateCollisionTime(collisionData) {
+        let [obj1, obj2, boundIdx, time, boxI1, boxI2] = collisionData;
         
+        let dvec1 = obj1.__getDisplacementVector();
+        let dvec2 = obj2.__getDisplacementVector();
+        let obj1Box = obj1.getHitBoxes()[boxI1];
+        let obj2Box = obj2.getHitBoxes()[boxI2];
+        let obj1Side = this.__getCollisionSides([obj1Box], dvec1, this._colSidesAt(obj1._collisionSides, boxI1))[0][boundIdx];
+        let obj2Side = this.__getCollisionSides([obj2Box], dvec2, this._colSidesAt(obj2._collisionSides, boxI2))[0][sideSwap[boundIdx]];
+        
+        let [newTime, overlap, bound] = this.__intersection(obj1Side, dvec1, obj2Side, dvec2, true);
+        
+        return [obj1, obj2, boundIdx, newTime, boxI1, boxI2];
+    }
+    
+    resolveCollisions() {
         let sideSwap = GameCollisionManager.sideSwaps;
         let sideNames = GameCollisionManager.sideNames;
         
-        for(let [obj1, obj2, boundIdx, time, boxI1, boxI2] of this._collisions) {
+        while(this._collisions.size > 0) {
+            let [obj1, obj2, boundIdx, time, boxI1, boxI2] = this._collisions.pop();
+            
             let dvec1 = obj1.__getDisplacementVector();
             let dvec2 = obj2.__getDisplacementVector();
             let obj1Box = obj1.getHitBoxes()[boxI1];
@@ -1105,9 +1316,22 @@ class GameCollisionManager {
             // For extra functionality...
             obj1.handleCollision(obj2, sideNames[boundIdx], obj1Box, boxI1, obj2Box, boxI2);
             obj2.handleCollision(obj1, sideNames[sideSwap[boundIdx]], obj2Box, boxI2, obj1Box, boxI1);
+            
+            // Update nearby collision times...
+            for(let [otherObj, col] of this._collisions.getNeighborsOf(obj1)) {
+                col = this._updateCollisionTime(col);
+                this._collisions.update(col);
+            }
+            for(let [otherObj, col] of this._collisions.getNeighborsOf(obj2)) {
+                col = this._updateCollisionTime(col);
+                this._collisions.update(col);
+            }
+            
+            this._flushUnkowns();
         }
         
-        this._collisions.length = 0;
+        this._collisions.clear();
+        this._unknowns.length = 0;
     }
 }
 
@@ -2245,6 +2469,7 @@ function _copyGameStateProperties(gameState, subGameState) {
     subGameState.assets = gameState.assets;
     subGameState.__zoneStackAction = gameState.__zoneStackAction;
     subGameState.__zoneStack = gameState.__zoneStack;
+    subGameState.gamepads = gameState.gamepads;
     
     return subGameState;
 }
