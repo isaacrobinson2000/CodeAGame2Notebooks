@@ -288,7 +288,7 @@ class Sprite {
     }
     
     setVerticalFlip(value) {
-        this._virt_flip = !!(value);
+        this._vert_flip = !!(value);
     }
     
     setHorizontalFlip(value) {
@@ -342,11 +342,11 @@ class Sprite {
         
         let outsetW = (this._width / this._inset[2]) * width;
         let outsetH = (this._height / this._inset[3]) * height;
-        let outsetX = x - (this._inset[0] / this._width) * outsetW;
-        let outsetY = y - (this._inset[1] / this._height) * outsetH;
+        let backX = (this._inset[0] / this._width) * outsetW;
+        let backY = (this._inset[1] / this._height) * outsetH;
         
         ctx.save();
-        ctx.translate((this._horiz_flip)? outsetX + outsetW: outsetX, (this._vert_flip)? outsetY + outsetH: outsetY);
+        ctx.translate((this._horiz_flip)? x + width + backX: x - backX, (this._vert_flip)? y + height + backY: y - backY);
         ctx.scale(this._horiz_flip? -1: 1, this._vert_flip? -1: 1);
         ctx.drawImage(this._img, xin, 0, this._width, this._height, 0, 0, outsetW, outsetH);
         ctx.restore();
