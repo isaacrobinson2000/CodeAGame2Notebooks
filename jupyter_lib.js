@@ -2629,7 +2629,7 @@ elem_proto.makeGame = async function(gameInfo, entryZone, cameraSpec = null) {
             }
             
             let newZone = globalGameState.zones[arg].buildZone(cameraInfo);
-            let subGameState = {zoneName: arg};
+            let subGameState = {zoneName: arg, cameraConfig: cameraInfo};
             globalGameState.__zoneStack.push([newZone, subGameState]);
         }
         else if(command == "pop") {
@@ -2639,7 +2639,7 @@ elem_proto.makeGame = async function(gameInfo, entryZone, cameraSpec = null) {
             
             if(arg != null) {
                 let newZone = globalGameState.zones[arg].buildZone(cameraInfo);
-                let subGameState = {zoneName: arg};
+                let subGameState = {zoneName: arg, cameraConfig: cameraInfo};
                 globalGameState.__zoneStack.push([newZone, subGameState]);
             }
             else if(globalGameState.__zoneStack.length > 0) {
