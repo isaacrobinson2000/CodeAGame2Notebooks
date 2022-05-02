@@ -1119,6 +1119,157 @@ class CollisionHeap {
     }
 }
 
+class SweepAndPrune {
+    constructor() {
+        this._objectSet = new Map();
+        this._objects = [];
+        this._xs = [];
+        this._ys = [];
+        this._visitState = false;
+    }
+    
+    addEntity(entity) {
+        if(this._objectSet.has(entity)) return false;
+        
+        this._objects.push([
+            entity,
+            null,
+            0,  // Start point of x 
+            0,  // End point of x
+            0,  // Start point of y
+            0  // End point of y
+        ]);
+        
+        this._objectSet.set(entity, [this._objects.length - 1, this._visitState]);
+        this._xs.push([this._objects.length - 1, false], [this._objects.length - 1, true]);
+        this._ys.push([this._objects.length - 1, false], [this._objects.length - 1, true]);
+        
+        return true;
+    }
+    
+    deleteEntity(entity) {
+        if(!this._objectSet.has(entity)) return false;
+        
+        let [idx, visitedFlag] = this._objectSet.get(entity);
+        _popAndSwapWithEnd(this._objects, idx);
+        this._objectSet.delete(entity);
+        if(idx < this._objects.length) this._objectSet.get(this._objects[idx][0])[0] = idx;
+        
+        return true;
+    }
+    
+    sync(loadedChunks, players) {
+        // Mark all visited objects by flipping the visited flag...
+        for(let [x, y, chunk] of loadedChunks) {
+            for(let entity of chunk.entities) {
+                this.addEntity(entity);
+                this._objectSet.get(entity)[1] = !this._objectSet.get(entity)[1];
+            }
+        }
+        
+        for(let player of players) {
+            this.addEntity(player);
+            this._objectSet.get(player)[1] = !this._objectSet.get(player)[1];
+        }
+        
+        // Invert the visit flag...
+        this._visitState = !this._visitState;
+        
+        // Delete any objects that have not been visited...
+        for(let i = 0; i < this._objects.length; ) {
+            let object = this._objects[i][0];
+            
+            if(this._objectSet.get(object)[1] != this._visitState) {
+                this.deleteEntity(object);
+            }
+            else i++;
+        }
+    }
+    
+    _cutdown(arr) {
+        for(let i = 0; i < arr.length; ) {
+            if(arr[i][0] >= this._objects.length) _popAndSwapWithEnd(arr, i);
+            else i++;
+        }
+    }
+    
+    detectCollisions(collisionHandler) {
+        for(let i = 0; i < this._objects.length; i++) {
+            if(!("__getFullCollisionBox" in this._objects[i][0])) {
+                this._objects[i][1] = [-i, -i, -i + 0.1, -i + 0.1];
+                continue;
+            }
+            this._objects[i][1] = this._objects[i][0].__getFullCollisionBox();
+        }
+        
+        this._cutdown(this._xs);
+        this._cutdown(this._ys);
+        
+        // Sort the x and y axes by starts of the bounding boxes
+        this._xs.sort((a, b) => {
+            let off1 = (a[1])? this._objects[a[0]][1][0] + this._objects[a[0]][1][2]: this._objects[a[0]][1][0];
+            let off2 = (b[1])? this._objects[b[0]][1][0] + this._objects[b[0]][1][2]: this._objects[b[0]][1][0];
+            return off1 - off2;
+        });
+        this._ys.sort((a, b) => {
+            let off1 = (a[1])? this._objects[a[0]][1][1] + this._objects[a[0]][1][3]: this._objects[a[0]][1][1];
+            let off2 = (b[1])? this._objects[b[0]][1][1] + this._objects[b[0]][1][3]: this._objects[b[0]][1][1];
+            return off1 - off2;
+        });
+        
+        for(let i = 0; i < this._xs.length; i++) {
+            let [objIdx, isEnd] = this._xs[i];
+            this._objects[objIdx][(isEnd)? 3: 2] = i;
+        }
+        
+        for(let i = 0; i < this._ys.length; i++) {
+            let [objIdx, isEnd] = this._ys[i];
+            this._objects[objIdx][(isEnd)? 5: 4] = i;
+        }
+        
+        let cols = {};
+        
+        for(let i = 0; i < this._objects.length; i++) {
+            let obj1 = this._objects[i][0];
+            let box1 = this._objects[i][1];
+            
+            let start = 0, end = 0, arr = null;
+            let xrange = this._objects[i][3] - this._objects[i][2];
+            let yrange = this._objects[i][5] - this._objects[i][4];
+            
+            if(xrange < yrange) {
+                start = this._objects[i][2];
+                end = this._objects[i][3];
+                arr = this._xs;
+            }
+            else {
+                start = this._objects[i][4];
+                end = this._objects[i][5];
+                arr = this._ys;
+            }
+            
+            for(let j = start + 1; j < end; j++) {
+                let obj2 = this._objects[arr[j][0]][0];
+                let box2 = this._objects[arr[j][0]][1];
+                let key = [i, arr[j][0]].sort((a, b) => a - b);
+                
+                if(key in cols) continue;
+                
+                if(collisionHandler.__insideCheck(box1, box2)) {
+                    cols[key] = true;
+                    collisionHandler.addCollision(obj1, obj2);
+                }
+            }
+        }
+    }
+    
+    clear() {
+        this._object.length = 0;
+        this._xs.length = 0;
+        this._ys.length = 0;
+    }
+}
+
 class GameCollisionManager {
     constructor() {
         this._collisions = new CollisionHeap();
@@ -1383,7 +1534,8 @@ function _loadChunk(cx, cy, level, blockTypes, entityTypes, assets) {
     
     // Load entities...
     for(let data of level.chunks[cx][cy].entities) {
-        newLoadedChunk.entities.push(entityTypes[data._$type].fromJSON(data, assets));
+        let entity = entityTypes[data._$type].fromJSON(data, assets);
+        newLoadedChunk.entities.push(entity);
     }
     
     return newLoadedChunk;
@@ -1537,21 +1689,10 @@ function _buildChunkLookup(loadedChunks) {
     return chunkLookup;
 }
 
-function _resetLevel(gameState) {
-    gameState.level = JSON.parse(JSON.stringify(gameState.__origLevel));
-    
-    let lvl = gameState.level;
-    gameState.__player = gameState.playerType.fromJSON(lvl.players, gameState.assets);
-    gameState.camera.setTrackedObject(gameState.__player);
-    
-    gameState.loadedChunks = [];
-    gameState.chunkLookup = {};
-}
-
 /*
  * COLLISION MANAGEMENT FUNCTIONS... 
  */
-function _handleCollisions(loadedChunks, chunkLookup, chunkSize, numChunks, players, gameState) {
+function _handleCollisions(loadedChunks, chunkLookup, chunkSize, numChunks, players, gameState, collisionDetector) {
     // Bound value, then compute floored division and modulo...
     let boundNFloor = (x, xlow, xhigh, bounding_func = Math.floor) => {
         x = _bound(x, xlow, xhigh);
@@ -1601,26 +1742,12 @@ function _handleCollisions(loadedChunks, chunkLookup, chunkSize, numChunks, play
                     }
                 }
             }
-
-            // Now handle any entity-entity collisions...
-            for(let cj = ci; cj < loadedChunks.length; cj++) {
-                let [cx2, cy2, chunk2] = loadedChunks[cj]
-                
-                for(let j = ((ci == cj)? i + 1: 0); j < chunk2.entities.length; j++) {
-                    let entity2 = (j < 0)? players[players.length + j]: chunk2.entities[j];
-                    
-                    if(!("__getFullCollisionBox" in entity2)) continue;
-                    let [x2, y2, w2, h2] = entity2.__getFullCollisionBox();
-                    
-                    // Collision checks....
-                    if(collisionManager.__insideCheck([x1, y1, w1, h1], [x2, y2, w2, h2])) {                            
-                        collisionManager.addCollision(entity1, entity2);
-                    }
-                }
-            }
         }
     }
     
+    // Now handle any entity-entity collisions...
+    collisionDetector.sync(loadedChunks, players);  // <-- Sync SAP with latest set of loaded chunks and players (add/remove entities in it)...
+    collisionDetector.detectCollisions(collisionManager);  // <-- Detect collisions using the SAP... 
     collisionManager.resolveCollisions();
     
     for(let [cx, cy, chunk] of loadedChunks) {
@@ -1669,9 +1796,7 @@ function _buildCamerasFrom(canvas, cameraConfig, players) {
         
         cameraObjs.push(cameraObj);
     }
-    
-    console.log(cameraObjs);
-    
+        
     return cameraObjs;
 }
 
@@ -1718,6 +1843,8 @@ class Zone {
         this.postDraw = postDraw;
         this.cameraConfig = cameraConfig;
         this._initGameState = initGameState;
+        
+        this._colDetect = new SweepAndPrune();
     }
     
     initialized(gameState) {
@@ -1762,7 +1889,7 @@ class Zone {
             }
             
             // Update the entities...            
-            for(let i = 0; i < chunk.entities.length; i++) {
+            for(let i = 0; i < chunk.entities.length; ) {
                 let entity = chunk.entities[i];
                 // Update entity location...
                 if(entity.update(timeStep, gameState)) {
@@ -1782,7 +1909,10 @@ class Zone {
                     let loc = [ex, ey];
                     if(!(loc in relocate)) relocate[loc] = [];
                     relocate[loc].push(entity);
+                    continue;
                 }
+                
+                i++;
             }
         }
         
@@ -1795,7 +1925,7 @@ class Zone {
             }
         }
         
-        // Unload any remaining entities into the level as their chunks aren't loaded...
+        // Unload any remaining entities into the level as their chunks aren't loaded...        
         for(let loc in relocate) {
             let [ex, ey] = loc.split(",").map((val) => +val);
             for(let entity of relocate[loc]) {
@@ -1804,7 +1934,7 @@ class Zone {
         }
         
         // Update the player... Bound player to game zone...
-        for(let i = 0; i < gameState.__players.length; i++) {
+        for(let i = 0; i < gameState.__players.length; ) {
             let player = gameState.__players[i];
             
             if(player.update(timeStep, gameState)) {
@@ -1817,10 +1947,11 @@ class Zone {
                 continue;
             }
             _reboundEntity(player, chunkSize, numChunks);
+            i++;
         }
         
         // Handle collisions between objects.... (Expensive...)
-        _handleCollisions(gameState.loadedChunks, gameState.chunkLookup, chunkSize, numChunks, gameState.__players, gameState);
+        _handleCollisions(gameState.loadedChunks, gameState.chunkLookup, chunkSize, numChunks, gameState.__players, gameState, this._colDetect);
         
         // Finally, update the cameras...
         for(let camera of gameState.cameras) {
@@ -1830,7 +1961,8 @@ class Zone {
         // Update chunks...
         gameState.loadedChunks = _manageChunks(
             this.zoneData, gameState.cameras, gameState.loadedChunks, 
-            gameState.blockTypes, gameState.entityTypes, gameState.assets
+            gameState.blockTypes, gameState.entityTypes, gameState.assets,
+            
         );
         gameState.chunkLookup = _buildChunkLookup(gameState.loadedChunks);
         
