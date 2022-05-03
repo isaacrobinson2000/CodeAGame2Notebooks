@@ -617,6 +617,7 @@ elem_proto.makeBaseGame = async function(gameLoop, gameState = {}, assets = {}, 
     newDiv.append(loadDiv);
     
     $(document.body).append(newDiv);
+    if(document.activeElement != document.body) document.activeElement.blur();
     
     gameState = {...gameState};
     
