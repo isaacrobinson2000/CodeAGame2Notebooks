@@ -916,7 +916,7 @@ class GameObject {
     }
     
     static fromJSON(data, assets) {
-        let obj = new this(data.x, data.y, assets);
+        let obj = new this(data.$x, data.$y, assets);
         
         for(let prop in data) {
             if(!prop.startsWith("__")) obj[prop] = data[prop];
@@ -2258,13 +2258,13 @@ elem_proto.levelEditor = async function(gameInfo, editZone) {
                 this._chunkSize = gameState.zone.zoneData.chunkSize;
             }
             
-            [this.x, this.y] = gameState.cameras[0].reverseTransform(gameState.mouse.location);
+            [this.$x, this.$y] = gameState.cameras[0].reverseTransform(gameState.mouse.location);
 
             this._sprite.update(timeStep);
         }
         
         getBlockLocation() {
-            let [x, y] = [this.x, this.y];
+            let [x, y] = [this.$x, this.$y];
             
             if((x < 0) || (x >= this._numChunks[0] * this._chunkSize)) return [null, null];
             if((y < 0) || (y >= this._numChunks[1] * this._chunkSize)) return [null, null];
@@ -2273,7 +2273,7 @@ elem_proto.levelEditor = async function(gameInfo, editZone) {
         }
         
         draw(canvas, painter, camera) {
-            let [x, y, w, h] = camera.transformBox([Math.floor(this.x), Math.floor(this.y), 1, 1]);
+            let [x, y, w, h] = camera.transformBox([Math.floor(this.$x), Math.floor(this.$y), 1, 1]);
             this._sprite.draw(painter, x, y, w, h);
         }
     }
@@ -2748,8 +2748,8 @@ function _attachGameAPI(gameState) {
         let [cx, cy] = [Math.floor(bx / level.chunkSize), Math.floor(by / level.chunkSize)];
         [bx, by] = [Math.floor(bx), Math.floor(by)];
         
-        block.x = Math.floor(bx);
-        block.y = Math.floor(by);
+        block.$x = Math.floor(bx);
+        block.$y = Math.floor(by);
         let subBX = bx % level.chunkSize;
         let subBY = by % level.chunkSize;
         

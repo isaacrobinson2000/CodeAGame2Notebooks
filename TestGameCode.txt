@@ -5,14 +5,13 @@ class LogBlock extends GameCollisionObject {
     constructor(x, y, assets) {
         super(x, y, assets);
         this._sprite = assets.sprites.logSprite.buildSprite();
-        this._collisionSides = {"top": true};
     }
     
     update(timeStep, gameState) {}
     
     draw(canvas, painter, camera) {
         // Implement this:
-        let [cx, cy, cw, ch] = camera.transformBox([this.x, this.y - 3/32, 1, 1]);
+        let [cx, cy, cw, ch] = camera.transformBox([this.$x, this.$y - 3/32, 1, 1]);
         this._sprite.draw(painter, cx, cy, cw, ch);
     }
     
@@ -36,7 +35,7 @@ class GameBlock extends GameCollisionObject {
     
     draw(canvas, painter, camera) {
         // Implement this:
-        let [cx, cy, cw, ch] = camera.transformBox([this.x, this.y, 1, 1]);
+        let [cx, cy, cw, ch] = camera.transformBox([this.$x, this.$y, 1, 1]);
         this._sprite.draw(painter, cx, cy, cw, ch);
     }
     
@@ -60,7 +59,7 @@ class GameBlock2 extends GameCollisionObject {
     
     draw(canvas, painter, camera) {
         // Implement this:
-        let [cx, cy, cw, ch] = camera.transformBox([this.x, this.y - (3 / 32), 1, 35 / 32]);
+        let [cx, cy, cw, ch] = camera.transformBox([this.$x, this.$y - (3 / 32), 1, 35 / 32]);
         this._sprite.draw(painter, cx, cy, cw, ch);
     }
     
@@ -86,7 +85,7 @@ class Tree extends GameObject {
         // Implement this:
         let scale = this._numBlocks;
         let [cx, cy, cw, ch] = camera.transformBox([
-            this.x, this.y, scale * (this._sprite.width / this._sprite.height), scale + this._digIn
+            this.$x, this.$y, scale * (this._sprite.width / this._sprite.height), scale + this._digIn
         ]);
         this._sprite.draw(painter, cx, cy, cw, ch);
     }
@@ -96,8 +95,8 @@ class Tree extends GameObject {
         this._sprite.draw(painter, cx, cy, cw, ch);
     }
     
-    getHitBoxes() {
-        return [[this.x, this.y, 5, 4]];
+    getBoundingBox() {
+        return [this.$x, this.$y, 5, 4];
     }
     
     getZOrder() {
@@ -118,7 +117,7 @@ class Grass extends GameObject {
     
     draw(canvas, painter, camera) {
         // Implement this:
-        let [cx, cy, cw, ch] = camera.transformBox([this.x, this.y, 1, 35/32]);
+        let [cx, cy, cw, ch] = camera.transformBox([this.$x, this.$y, 1, 35/32]);
         this._sprite.draw(painter, cx, cy, cw, ch);
     }
     
@@ -160,8 +159,8 @@ class PhysicsObject extends GameCollisionObject {
         this._pvx = this._vx;
         this._pvy = this._vy;
 
-        this.x += this._vx * timeStep;
-        this.y += this._vy * timeStep;
+        this.$x += this._vx * timeStep;
+        this.$y += this._vy * timeStep;
         this._airResistance = this._airResistanceNormal;        
     }
 }
@@ -235,7 +234,7 @@ class Player extends PhysicsObject {
         }
         
         let [__x, __y, w, h] = gameState.getLevelBounds();
-        if((this.y + this._inset[3]) >= h) gameState.exitZone(gameState.zoneName);
+        if((this.$y + this._inset[3]) >= h) gameState.exitZone(gameState.zoneName);
         
         this._sprite.update(timeStep);
     }
@@ -244,8 +243,8 @@ class Player extends PhysicsObject {
         // Implement this:
         let [xi, yi, wi, hi] = this._inset;
         let [inx, iny] = [
-            this.x - xi, 
-            this.y - yi
+            this.$x - xi, 
+            this.$y - yi
         ];
         let [cx, cy, cw, ch] = camera.transformBox([inx, iny, 42 / 32, 1]);
         
@@ -285,16 +284,6 @@ class Player extends PhysicsObject {
             }
             else this._hit_sound.play();
         }
-    }
-    
-    getHitBoxes() {
-        let [xi, yi, wi, hi] = this._inset;
-        let box2 = (this._sprite.isHorizontallyFlipped())? [this.x, this.y, 8 / 32, 9 / 32]: [this.x + wi - 8 / 32, this.y, 8 / 32, 9 / 32];
-        
-        return [
-            [this.x, this.y + 9 / 32, wi, hi - 9 / 32],
-            box2
-        ];
     }
 }
 
@@ -360,8 +349,8 @@ class Enemy extends PhysicsObject {
         // Implement this:
         let [xi, yi, wi, hi] = this._inset;
         let [inx, iny] = [
-            this.x - xi, 
-            this.y - yi
+            this.$x - xi, 
+            this.$y - yi
         ];
         let [cx, cy, cw, ch] = camera.transformBox([inx, iny, 96 / 32, 24 / 32]);
         this._sprite.draw(painter, cx, cy, cw, ch);
@@ -387,7 +376,7 @@ class Enemy extends PhysicsObject {
     
     getHitBoxes() {
         let [xi, yi, wi, hi] = this._inset;
-        return [[this.x, this.y, wi, hi]];
+        return [[this.$x, this.$y, wi, hi]];
     }
 }
 
@@ -478,7 +467,7 @@ class WaterTop extends GameCollisionObject {
     }
     
     draw(canvas, painter, camera) {
-        let [cx, cy, cw, ch] = camera.transformBox([this.x, this.y, 1, 1]);
+        let [cx, cy, cw, ch] = camera.transformBox([this.$x, this.$y, 1, 1]);
         this._sprite.draw(painter, cx, cy, cw, ch);
     }
     
@@ -506,7 +495,7 @@ class WaterTop extends GameCollisionObject {
     }
     
     getHitBoxes() {
-        return [[this.x, this.y + 0.25, 1, 0.75]];
+        return [[this.$x, this.$y + 0.25, 1, 0.75]];
     }
     
     getZOrder() {
@@ -829,4 +818,4 @@ let gameInfo = {
     }
 };
 
-element.makeGame(gameInfo, "test");
+element.levelEditor(gameInfo, "test");
