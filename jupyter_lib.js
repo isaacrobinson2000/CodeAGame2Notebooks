@@ -94,10 +94,18 @@ class Sound {
      *                    and whenever music is unmuted...
      */
     constructor(soundSrc, background, volume = 1) {
-        this.soundElm = new Audio(soundSrc);
-        this.soundElm.src = soundSrc;
-        this.soundElm.setAttribute("controls", "none");
-        this.soundElm.style.display = "none";
+        if(soundSrc in Sound.AUDIO_ELEMENTS) {
+            this.soundElm = Sound.AUDIO_ELEMENTS[soundSrc];
+        }
+        else {
+            this.soundElm = new Audio(soundSrc);
+            this.soundElm.src = soundSrc;
+            this.soundElm.setAttribute("controls", "none");
+            this.soundElm.style.display = "none";
+            Sound.AUDIO_ELEMENTS[soundSrc] = this.soundElm;
+        }
+        
+        
         Sound.ALL_SOUNDS.push(this);
         
         this.soundElm.volume = volume
@@ -201,6 +209,7 @@ class Sound {
 // Firefox doesn't support static variables yet, so have to do dumb hack to do class global variables...
 Sound.MUTED = false;
 Sound.ALL_SOUNDS = [];
+Sound.AUDIO_ELEMENTS = {};
 
 window.Sound = Sound;
 
@@ -898,7 +907,7 @@ class GameObject {
     }
     
     move(dx = 0, dy = 0) {
-        this.setLocation(this.$x + dx, this.$y + dy);
+        this.setLocation([this.$x + dx, this.$y + dy]);
     }
     
     toJSON() {
@@ -943,7 +952,7 @@ window.GameObject = GameObject;
 
 
 function quadFormula(a, b, c) {
-    rt = Math.sqrt(b ** 2 - 4 * a * c);
+    let rt = Math.sqrt((b ** 2) - (4 * a * c));
     
     return [
         (-b - rt) / (2 * a),
@@ -985,7 +994,9 @@ function pointVsLineCollsion(point, dpoint, segment, dsegment) {
     
     let [sol1, sol2] = quadFormula(a, b, c);
     
-    sol1 = (sol1 > 0 && sol1 < sol2)? sol1: ((sol2 < 0)? sol2: Infinity);
+    console.log(sol1, sol2);
+    
+    sol1 = (sol1 > 0 && sol1 < sol2)? sol1: ((sol2 > 0)? sol2: Infinity);
     
     if(sol1 == Infinity) {
         return sol1;
@@ -1312,7 +1323,7 @@ class SegmentMap {
     }
     
     has(entity, index) {
-        return (this._map.has(value) && this._map.get(value)[index] !== undefined);
+        return (this._map.has(entity) && this._map.get(entity)[index] !== undefined);
     }
     
     get(entity, index) {
@@ -1324,7 +1335,7 @@ class SegmentMap {
     }
     
     set(entity, index, value) {
-        this._map.set(this._map.get(entity) ?? []);
+        this._map.set(entity, this._map.get(entity) ?? []);
         this._map.get(entity)[index] = value;
     }
     
@@ -1352,7 +1363,7 @@ class SweepAndPrune {
     addEntity(entity) {
         let addedStuff = false;
         
-        for(let i = 0; i = entity.points.length; i++) { 
+        for(let i = 0; i < entity.points.length; i++) { 
             if(this._segmentSet.has(entity, i)) continue;
             addedStuff = true;
             
@@ -1366,11 +1377,11 @@ class SweepAndPrune {
                 0  // End point of y
             ]);
             
-            this._segmentSet.set(entity, i, [this._objects.length - 1, this._visitState]);
-            this._xs.push([this._objects.length - 1, false], [this._objects.length - 1, true]);
-            this._ys.push([this._objects.length - 1, false], [this._objects.length - 1, true]);
+            this._segmentSet.set(entity, i, [this._segments.length - 1, this._visitState]);
+            this._xs.push([this._segments.length - 1, false], [this._segments.length - 1, true]);
+            this._ys.push([this._segments.length - 1, false], [this._segments.length - 1, true]);
         }
-        
+                
         return addedStuff;
     }
     
@@ -1386,7 +1397,6 @@ class SweepAndPrune {
     
     _deleteSegment(entity, i) {
         if(!this._segmentSet.has(entity, i)) return false;
-        deletedStuff = true;
         
         let [idx, visitedFlag] = this._segmentSet.get(entity, i);
         _popAndSwapWithEnd(this._segments, idx);
@@ -1402,6 +1412,7 @@ class SweepAndPrune {
     }
     
     sync(loadedChunks, players) {
+        
         // Mark all visited objects by flipping the visited flag...
         for(let [x, y, chunk] of loadedChunks) {
             for(let entity of chunk.entities) {
@@ -1412,22 +1423,22 @@ class SweepAndPrune {
         
         for(let player of players) {
             this.addEntity(player);
-            this._mark(entity);
+            this._mark(player);
         }
         
         // Invert the visit flag...
         this._visitState = !this._visitState;
-        
+                
         // Delete any objects that have not been visited...
-        for(let i = 0; i < this._semgnets.length; ) {
+        for(let i = 0; i < this._segments.length; ) {
             let object = this._segments[i][0];
-            let i = this._segments[i][1];
+            let idx = this._segments[i][1];
             
-            if(this._segmentSet.get(object, i)[1] != this._visitState) {
-                this._deleteSegment(object, i);
+            if(this._segmentSet.get(object, idx)[1] != this._visitState) {
+                this._deleteSegment(object, idx);
             }
             else i++;
-        }
+        }        
     }
     
     _cutdown(arr) {
@@ -1529,8 +1540,8 @@ class GameCollisionManager {
     }
     
     __intersection(obj1, segment1, obj2, segment2) {
-        let [os1, dos1] = obj1.__getSegmentInfo(obj1, segment1);
-        let [os2, dos2] = obj2.__getSegmentInfo(obj2, segment2);
+        let [os1, dos1] = obj1.__getSegmentInfo(segment1);
+        let [os2, dos2] = obj2.__getSegmentInfo(segment2);
         
         return segmentVsSegment(os1, dos1, os2, dos2);
     }
@@ -1538,10 +1549,7 @@ class GameCollisionManager {
     addCollision(obj1, segment1, obj2, segment2) {
         if((obj1 instanceof GameCollisionObject) && (obj2 instanceof GameCollisionObject)) {
             let [time, pointIdx, segment] = this.__intersection(obj1, segment1, obj2, segment2);
-            
-            if(bestTime != Infinity) {
-                this._collisions.push([obj1, obj2, segment1, segment2, time]);
-            }
+            this._collisions.push([obj1, obj2, segment1, segment2, time]);
         }
     }
     
@@ -1550,15 +1558,14 @@ class GameCollisionManager {
         return [obj1, obj2, seg1, seg2, this.__intersection(obj1, seg1, obj2, seg2)[0]];
     }
     
-    resolveCollisions() {
-        let sideSwap = GameCollisionManager.sideSwaps;
-        let sideNames = GameCollisionManager.sideNames;
-        
+    resolveCollisions() {        
         while(this._collisions.size > 0) {
             let [obj1, obj2, segment1, segment2, oldTime] = this._collisions.pop();
-            let [time, poc, soc] = this.__intersection([obj1, obj2, segment1, segment2, time]);
+            let [time, poc, soc] = this.__intersection(obj1, segment1, obj2, segment2);
             
-            if(time == Infinity) {
+            console.log([time, poc, soc]);
+            
+            if((time > 1) || (time < 0)) {
                 continue;
             }
                                     
@@ -1582,9 +1589,8 @@ class GameCollisionManager {
                 this._collisions.update(col);
             }
         }
-        
+                
         this._collisions.clear();
-        this._unknowns.length = 0;
     }
 }
 
@@ -1599,7 +1605,7 @@ function _loadChunk(cx, cy, level, blockTypes, entityTypes, assets) {
     for(let x = 0; x < chunkSize; x++) {
         for(let y = 0; y < chunkSize; y++) {
             let blockData = level.chunks[cx][cy].blocks[x][y];
-            let blockName = (blockData != null)? blockData._$type: null;
+            let blockName = (blockData != null)? blockData.__$type: null;
             let bx = cx * chunkSize + x;
             let by = cy * chunkSize + y;
 
@@ -1609,7 +1615,7 @@ function _loadChunk(cx, cy, level, blockTypes, entityTypes, assets) {
     
     // Load entities...
     for(let data of level.chunks[cx][cy].entities) {
-        let entity = entityTypes[data._$type].fromJSON(data, assets);
+        let entity = entityTypes[data.__$type].fromJSON(data, assets);
         newLoadedChunk.entities.push(entity);
     }
     
@@ -1775,7 +1781,7 @@ function _handleCollisions(loadedChunks, chunkLookup, chunkSize, numChunks, play
     }
     
     let divmod = (x, y) => [Math.floor(x / y), Math.floor(x % y)];
-    
+        
     let collisionManager = new GameCollisionManager();
             
     // Going over every entity in every loaded chunk...
@@ -1812,13 +1818,13 @@ function _handleCollisions(loadedChunks, chunkLookup, chunkSize, numChunks, play
                         let [x2, y2, w2, h2] = block.getBoundingBox();
                         
                         if(collisionManager.__insideCheck([x1, y1, w1, h1], [x2, y2, w2, h2])) {
-                            for(let i = 0; i < block.points.length; i++) {
-                                for(let j = 0; j < entity1.points.length; j++) {
-                                    let b1 = entity1.__getSegmentBox(j);
-                                    let b2 = block.__getSegmentBox(i);
+                            for(let j = 0; j < block.points.length; j++) {
+                                for(let k = 0; k < entity1.points.length; k++) {
+                                    let b1 = entity1.__getSegmentBox(k);
+                                    let b2 = block.__getSegmentBox(j);
                                     
                                     if(collisionManager.__insideCheck(b1, b2)) {
-                                        collisionManager.addCollision(entity1, j, block, i);
+                                        collisionManager.addCollision(entity1, k, block, j);
                                     }
                                 }
                             }
@@ -1828,26 +1834,11 @@ function _handleCollisions(loadedChunks, chunkLookup, chunkSize, numChunks, play
             }
         }
     }
-    
+        
     // Now handle any entity-entity collisions...
     collisionDetector.sync(loadedChunks, players);  // <-- Sync SAP with latest set of loaded chunks and players (add/remove entities in it)...
     collisionDetector.detectCollisions(collisionManager);  // <-- Detect collisions using the SAP... 
-    collisionManager.resolveCollisions();
-    
-    for(let [cx, cy, chunk] of loadedChunks) {
-        for(let blockCol of chunk.blocks) {
-            for(let block of blockCol) {
-                if((block != null) && ("onCollisionEnd" in block)) block.onCollisionEnd();
-            }
-        }
-        for(let entity of chunk.entities) {
-            if("onCollisionEnd" in entity) entity.onCollisionEnd();
-        }
-    }
-    
-    for(let player of players) {
-        if("onCollisionEnd" in player) player.onCollisionEnd();
-    }
+    collisionManager.resolveCollisions();  // Resolve all collisions using the collision heap...
 }
 
 
@@ -1941,7 +1932,7 @@ class Zone {
             gameState.loadedChunks = [];
             
             for(let player of this.zoneData.players) {
-                let playerType = gameState.playerTypes[player._$type];
+                let playerType = gameState.playerTypes[player.__$type];
                 gameState.__players.push(playerType.fromJSON(player, gameState.assets));
             }
                         

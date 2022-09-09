@@ -1,0 +1,76 @@
+%%javascript
+// Game code goes here....
+class GameBlock extends GameCollisionObject {
+    draw(canvas, painter, camera) {
+        let [x, y, w, h] = camera.transformBox(this.getBoundingBox());
+        painter.fillStyle = "red";
+        painter.fillRect(x, y, w, h);
+    }
+    
+    drawPreview(canvas, painter, box) {
+        let [x, y, w, h] = box;
+        painter.fillStyle = "red";
+        painter.fillRect(x, y, w, h);
+    }
+}
+
+class PhysicsObject extends GameCollisionObject {
+    constructor(x, y, assets) {
+        super(x, y, assets);
+        this.gravity = 0.001;
+        this.vx = 0;
+        this.vy = 0;
+    }
+    
+    update(timeStep) {
+        this.vy += this.gravity * timeStep;
+        this.move(this.vx, this.vy);
+    }
+}
+
+class Entity extends PhysicsObject {
+    draw(canvas, painter, camera) {
+        let [x, y, w, h] = camera.transformBox(this.getBoundingBox());
+        painter.fillStyle = "green";
+        painter.fillRect(x, y, w, h);
+    }
+    
+    drawPreview(canvas, painter, box) {
+        let [x, y, w, h] = box;
+        painter.fillStyle = "green";
+        painter.fillRect(x, y, w, h);
+    }
+}
+
+class Player extends PhysicsObject {
+    draw(canvas, painter, camera) {
+        let [x, y, w, h] = camera.transformBox(this.getBoundingBox());
+        painter.fillStyle = "blue";
+        painter.fillRect(x, y, w, h);
+    }
+    
+    drawPreview(canvas, painter, box) {
+        let [x, y, w, h] = box;
+        painter.fillStyle = "blue";
+        painter.fillRect(x, y, w, h);
+    }
+}
+
+let gameInfo = {
+    objects: {
+        blocks: [GameBlock],
+        entities: [Entity],
+        players: [Player]
+    },
+    assets: {
+        sprites: {},
+        sounds: {}
+    },
+    zones: {
+        test: {
+            zoneData: "testdata/dummy_level.json"
+        },
+    }
+};
+
+element.makeGame(gameInfo, "test"); 
