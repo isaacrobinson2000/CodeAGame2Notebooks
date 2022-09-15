@@ -7,17 +7,10 @@
     "players": [
         {
             "__$type": "Player",
-            "$x": 1.4946236559139785,
-            "$y": 3.548387096774194,
-            "$boundingBox": [
-                1.4946236559139785,
-                3.548387096774194,
-                1,
-                1
-            ],
-            "$zorder": 0,
-            "$px": 1.4946236559139785,
-            "$py": 3.548387096774194,
+            "$x": 0.7956989247311828,
+            "$y": 3.387096774193548,
+            "$px": 0.7956989247311828,
+            "$py": 3.387096774193548,
             "$points": [
                 [
                     0,
@@ -43,59 +36,15 @@
                 true
             ],
             "vx": 0,
-            "vy": 0,
-            "gravity": -0.001
+            "vy": 0
         }
     ],
     "chunks": [
         [
             {
-                "entities": [
-                    {
-                        "__$type": "Entity",
-                        "$x": 5.505376344086021,
-                        "$y": 3.5591397849462365,
-                        "$boundingBox": [
-                            5.505376344086021,
-                            3.5591397849462365,
-                            1,
-                            1
-                        ],
-                        "$zorder": 0,
-                        "$px": 5.505376344086021,
-                        "$py": 3.5591397849462365,
-                        "$points": [
-                            [
-                                0,
-                                0
-                            ],
-                            [
-                                0,
-                                1
-                            ],
-                            [
-                                1,
-                                1
-                            ],
-                            [
-                                1,
-                                0
-                            ]
-                        ],
-                        "$solidSides": [
-                            true,
-                            true,
-                            true,
-                            true
-                        ],
-                        "vx": 0,
-                        "vy": 0,
-                        "gravity": -0.001
-                    }
-                ],
+                "entities": [],
                 "blocks": [
                     [
-                        null,
                         null,
                         null,
                         null,
@@ -104,16 +53,9 @@
                         {
                             "__$type": "GameBlock",
                             "$x": 0,
-                            "$y": 6,
-                            "$boundingBox": [
-                                0,
-                                6,
-                                1,
-                                1
-                            ],
-                            "$zorder": 0,
+                            "$y": 5,
                             "$px": 0,
-                            "$py": 6,
+                            "$py": 5,
                             "$points": [
                                 [
                                     0,
@@ -147,10 +89,10 @@
                         null,
                         null,
                         null,
+                        null,
                         null
                     ],
                     [
-                        null,
                         null,
                         null,
                         null,
@@ -159,16 +101,9 @@
                         {
                             "__$type": "GameBlock",
                             "$x": 1,
-                            "$y": 6,
-                            "$boundingBox": [
-                                1,
-                                6,
-                                1,
-                                1
-                            ],
-                            "$zorder": 0,
+                            "$y": 5,
                             "$px": 1,
-                            "$py": 6,
+                            "$py": 5,
                             "$points": [
                                 [
                                     0,
@@ -202,10 +137,10 @@
                         null,
                         null,
                         null,
+                        null,
                         null
                     ],
                     [
-                        null,
                         null,
                         null,
                         null,
@@ -214,16 +149,9 @@
                         {
                             "__$type": "GameBlock",
                             "$x": 2,
-                            "$y": 6,
-                            "$boundingBox": [
-                                2,
-                                6,
-                                1,
-                                1
-                            ],
-                            "$zorder": 0,
+                            "$y": 5,
                             "$px": 2,
-                            "$py": 6,
+                            "$py": 5,
                             "$points": [
                                 [
                                     0,
@@ -257,10 +185,10 @@
                         null,
                         null,
                         null,
+                        null,
                         null
                     ],
                     [
-                        null,
                         null,
                         null,
                         null,
@@ -269,16 +197,9 @@
                         {
                             "__$type": "GameBlock",
                             "$x": 3,
-                            "$y": 6,
-                            "$boundingBox": [
-                                3,
-                                6,
-                                1,
-                                1
-                            ],
-                            "$zorder": 0,
+                            "$y": 5,
                             "$px": 3,
-                            "$py": 6,
+                            "$py": 5,
                             "$points": [
                                 [
                                     0,
@@ -312,10 +233,10 @@
                         null,
                         null,
                         null,
+                        null,
                         null
                     ],
                     [
-                        null,
                         null,
                         null,
                         null,
@@ -324,16 +245,9 @@
                         {
                             "__$type": "GameBlock",
                             "$x": 4,
-                            "$y": 6,
-                            "$boundingBox": [
-                                4,
-                                6,
-                                1,
-                                1
-                            ],
-                            "$zorder": 0,
+                            "$y": 5,
                             "$px": 4,
-                            "$py": 6,
+                            "$py": 5,
                             "$points": [
                                 [
                                     0,
@@ -367,10 +281,10 @@
                         null,
                         null,
                         null,
+                        null,
                         null
                     ],
                     [
-                        null,
                         null,
                         null,
                         null,
@@ -379,16 +293,9 @@
                         {
                             "__$type": "GameBlock",
                             "$x": 5,
-                            "$y": 6,
-                            "$boundingBox": [
-                                5,
-                                6,
-                                1,
-                                1
-                            ],
-                            "$zorder": 0,
+                            "$y": 5,
                             "$px": 5,
-                            "$py": 6,
+                            "$py": 5,
                             "$points": [
                                 [
                                     0,
@@ -414,6 +321,7 @@
                                 true
                             ]
                         },
+                        null,
                         null,
                         null,
                         null,
@@ -431,44 +339,7 @@
                         null,
                         null,
                         null,
-                        {
-                            "__$type": "GameBlock",
-                            "$x": 6,
-                            "$y": 6,
-                            "$boundingBox": [
-                                6,
-                                6,
-                                1,
-                                1
-                            ],
-                            "$zorder": 0,
-                            "$px": 6,
-                            "$py": 6,
-                            "$points": [
-                                [
-                                    0,
-                                    0
-                                ],
-                                [
-                                    0,
-                                    1
-                                ],
-                                [
-                                    1,
-                                    1
-                                ],
-                                [
-                                    1,
-                                    0
-                                ]
-                            ],
-                            "$solidSides": [
-                                true,
-                                true,
-                                true,
-                                true
-                            ]
-                        },
+                        null,
                         null,
                         null,
                         null,
@@ -486,44 +357,7 @@
                         null,
                         null,
                         null,
-                        {
-                            "__$type": "GameBlock",
-                            "$x": 7,
-                            "$y": 6,
-                            "$boundingBox": [
-                                7,
-                                6,
-                                1,
-                                1
-                            ],
-                            "$zorder": 0,
-                            "$px": 7,
-                            "$py": 6,
-                            "$points": [
-                                [
-                                    0,
-                                    0
-                                ],
-                                [
-                                    0,
-                                    1
-                                ],
-                                [
-                                    1,
-                                    1
-                                ],
-                                [
-                                    1,
-                                    0
-                                ]
-                            ],
-                            "$solidSides": [
-                                true,
-                                true,
-                                true,
-                                true
-                            ]
-                        },
+                        null,
                         null,
                         null,
                         null,
@@ -541,44 +375,7 @@
                         null,
                         null,
                         null,
-                        {
-                            "__$type": "GameBlock",
-                            "$x": 8,
-                            "$y": 6,
-                            "$boundingBox": [
-                                8,
-                                6,
-                                1,
-                                1
-                            ],
-                            "$zorder": 0,
-                            "$px": 8,
-                            "$py": 6,
-                            "$points": [
-                                [
-                                    0,
-                                    0
-                                ],
-                                [
-                                    0,
-                                    1
-                                ],
-                                [
-                                    1,
-                                    1
-                                ],
-                                [
-                                    1,
-                                    0
-                                ]
-                            ],
-                            "$solidSides": [
-                                true,
-                                true,
-                                true,
-                                true
-                            ]
-                        },
+                        null,
                         null,
                         null,
                         null,

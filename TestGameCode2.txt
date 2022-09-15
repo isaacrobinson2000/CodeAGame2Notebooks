@@ -17,14 +17,19 @@ class GameBlock extends GameCollisionObject {
 class PhysicsObject extends GameCollisionObject {
     constructor(x, y, assets) {
         super(x, y, assets);
-        this.gravity = 0.001;
+        this._gravity = 0.0001;
         this.vx = 0;
         this.vy = 0;
     }
     
     update(timeStep) {
-        this.vy += this.gravity * timeStep;
+        this.vy += this._gravity * timeStep;
         this.move(this.vx, this.vy);
+    }
+
+    handleCollision(otherObj, sideIdx, otherSideIdx, time) {
+        this.vy = 0;
+        this.vx = 0;
     }
 }
 
@@ -43,6 +48,30 @@ class Entity extends PhysicsObject {
 }
 
 class Player extends PhysicsObject {
+    constructor(x, y, assets) {
+        super(x, y, assets);
+        this._priorUp = false;
+    }
+    
+    update(timeStep, gameState) {
+        let keys = gameState.keysPressed;
+        this.vx = 0;
+        
+        if("ArrowLeft" in keys) {
+            this.vx -= 7.5 / 1000;
+        }
+        if("ArrowRight" in keys) {
+            this.vx += 7.5 / 1000;
+        }
+        if(!this._priorUp && ("ArrowUp" in keys)) {
+            this.vy -= 30 / 1000;
+        }
+        this._priorUp = "ArrowUp" in keys;
+
+        super.update(timeStep, gameState);
+    }
+    
+    
     draw(canvas, painter, camera) {
         let [x, y, w, h] = camera.transformBox(this.getBoundingBox());
         painter.fillStyle = "blue";

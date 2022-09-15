@@ -580,7 +580,7 @@ class Camera {
         [cx, cy, cw, ch] = this.getBounds();
         let [xOut, yOut] = [this._centerPoint[0] - cx, this._centerPoint[1] - cy];
         let [newCx, newCy] = [_bound(cx, 0, levelBounds[0] - cw), _bound(cy, 0, levelBounds[1] - ch)];
-        this._centerPoint = [newCx + xOut, newCy + yOut];
+        this._centerPoint = [newCx + xOut, newCy + yOut];        
     }
     
     getBounds() {
@@ -877,9 +877,8 @@ class GameObject {
     constructor(x, y, assets) {
         this.$x = x;
         this.$y = y;
-        
-        this.$boundingBox = [0, 0, 1, 1];
-        this.$zorder = 0;
+        this._$zorder = 0;
+        this._$boundingBox = [0, 0, 1, 1];
     }
     
     // The $ functions are the ones that are actually called... Used for implementing hook-like features in subclasses...
@@ -916,7 +915,7 @@ class GameObject {
         };
         
         for(let prop in this) {
-            if(!prop.startsWith("__")) {
+            if(!prop.startsWith("_")) {
                 obj[prop] = this[prop];
             }
         }
@@ -928,7 +927,7 @@ class GameObject {
         let obj = new this(data.$x, data.$y, assets);
         
         for(let prop in data) {
-            if(!prop.startsWith("__")) obj[prop] = data[prop];
+            if(!prop.startsWith("_")) obj[prop] = data[prop];
         }
         
         return obj;
@@ -936,18 +935,19 @@ class GameObject {
     
     getBoundingBox() {
         return [
-            this.$x + this.$boundingBox[0],
-            this.$y + this.$boundingBox[1],
-            this.$boundingBox[2],
-            this.$boundingBox[3]
+            this.$x + this._$boundingBox[0],
+            this.$y + this._$boundingBox[1],
+            this._$boundingBox[2],
+            this._$boundingBox[3]
         ];
     }
     
     getZOrder() {
-        return this.$zorder;
+        return this._$zorder;
     }
 }
 
+GameObject.Z_ORDER = 0;
 window.GameObject = GameObject;
 
 
@@ -968,8 +968,18 @@ function minus(point1, point2) {
     return [point1[0] - point2[0], point1[1] - point2[1]];
 }
 
+function mult(point, scalar) {
+    return [point[0] * scalar, point[1] * scalar];
+}
+
 function dot(point1, point2) {
     return point1[0] * point2[0] + point1[1] * point2[1]; 
+}
+
+function segmentDist(point, dpoint, segment, dsegment, time) {
+    let pointVec = minus(pointAt(point, dpoint, time), pointAt(segment[0], dsegment[0], time));
+    let segVec = minus(pointAt(segment[1], dsegment[1], time), pointAt(segment[0], dsegment[0], time));
+    return Math.sqrt(dot(pointVec, pointVec) / dot(segVec, segVec));
 }
 
 function surfaceNorm(point1, point2) {
@@ -978,13 +988,20 @@ function surfaceNorm(point1, point2) {
 }
 
 function pointAt(point, dpoint, t) {
-    return plus(point, [dpoint[0] * t, dpoint[1] * t]);
+    return plus(point, mult(dpoint, t));
+}
+
+function pointsAt(points, dpoints, t) {
+    return points.map((p, i) => pointAt(p, dpoints[i], t));
 }
 
 
-function pointVsLineCollsion(point, dpoint, segment, dsegment) {
+function pointVsLineCollsion(point, dpoint, segment, dsegment) {    
     let n = surfaceNorm(segment[0], segment[1]);
-    let dn = surfaceNorm(dsegment[0], dsegment[1]);
+    let dn = minus(surfaceNorm(plus(segment[0], dsegment[0]), plus(segment[1], dsegment[1])), n);
+    
+    if(dn[0] == 0 && dn[1] == 0) dn = n;
+    
     let l = segment[0];
     let dl = dsegment[0];
     
@@ -993,25 +1010,20 @@ function pointVsLineCollsion(point, dpoint, segment, dsegment) {
     let c = dot(minus(point, l), n);
     
     let [sol1, sol2] = quadFormula(a, b, c);
+        
+    sol1 = (sol1 >= 0 && (sol1 < sol2 || sol2 < 0))? sol1: ((sol2 >= 0)? sol2: Infinity);
     
-    console.log(sol1, sol2);
-    
-    sol1 = (sol1 > 0 && sol1 < sol2)? sol1: ((sol2 > 0)? sol2: Infinity);
-    
-    if(sol1 == Infinity) {
+    if(sol1 == Infinity || (sol1 != sol1)) {
         return sol1;
     }
     
     // Now run the boundary check...
-    let boundDist = dot(
-        pointAt(point, dpoint, sol1), 
-        minus(pointAt(segment[1], dsegment[1], sol1), pointAt(segment[0], dsegment[0], sol1))
-    )
-    
+    let boundDist = segmentDist(point, dpoint, segment, dsegment, sol1);
+        
     if(boundDist < 0 || boundDist > 1) {
         return Infinity;
     }
-    
+        
     // Return the time of the collision...
     return sol1;
 }
@@ -1056,7 +1068,8 @@ class GameCollisionObject extends GameObject {
         
         this.$points = [[0, 0], [0, 1], [1, 1], [1, 0]];
         this.$solidSides = [true, true, true, true];
-        this.$boundingBox = [x, y, 1, 1];
+        this._$boundingBox = [0, 0, 1, 1];
+        this._$motionBox = [0, 0, 1, 1];
     }
     
     __initPriors() {
@@ -1087,13 +1100,22 @@ class GameCollisionObject extends GameObject {
         let [x1, y1, x2, y2] = [Infinity, Infinity, -Infinity, -Infinity];
         
         for(let [x, y] of this.$points) {
-            x1 = Math.min(x1, this.$x + x);
-            x2 = Math.max(x2, this.$x + x);
-            y1 = Math.min(y1, this.$y + y);
-            y2 = Math.max(y2, this.$y + y);
+            x1 = Math.min(x1, x);
+            x2 = Math.max(x2, x);
+            y1 = Math.min(y1, y);
+            y2 = Math.max(y2, y);
         }
         
-        this.$boundingBox = [x1, y1, x2 - x1, y2 - y1];
+        this._$boundingBox = [x1, y1, x2 - x1, y2 - y1];
+        
+        for(let [x, y] of this.$pointsPrior) {
+            x1 = Math.min(x1, x);
+            x2 = Math.max(x2, x);
+            y1 = Math.min(y1, y);
+            y2 = Math.max(y2, y);
+        }
+        
+        this._$motionBox = [x1, y1, x2 - x1, y2 - y1];
     }
     
     initPoints(points) {
@@ -1103,10 +1125,10 @@ class GameCollisionObject extends GameObject {
     }
     
     __getSegmentBox(index) {
-        let p1 = plus(this.getLocation(), this.$points[index]);
-        let p2 = plus(this.getLocation(), this.$points[(index + 1) % this.$points.length]);
+        let p1 = plus([this.$x, this.$y], this.$points[index]);
+        let p2 = plus([this.$x, this.$y], this.$points[(index + 1) % this.$points.length]);
         let priorP1 = plus([this.$px, this.$py], this.$pointsPrior[index]);
-        let priorP2 = plus([this.$px, this.$py], this.$pointsPrior[(index + 1) % this.$points.length]);
+        let priorP2 = plus([this.$px, this.$py], this.$pointsPrior[(index + 1) % this.$pointsPrior.length]);
         
         let minX = Math.min(p1[0], p2[0], priorP1[0], priorP2[0]);
         let minY = Math.min(p1[1], p2[1], priorP1[1], priorP2[1]);
@@ -1137,15 +1159,31 @@ class GameCollisionObject extends GameObject {
         ];
     }
     
-    __collisionAdjust(time) {
-        this.$x = this.$px + (this.$x - this.$px) * time;
-        this.$y = this.$py + (this.$y - this.$py) * time;
+    collisionAdjust(time, point, segment) {
+        time = time - 1e-8;
+        
+        let dx = (this.$x - this.$px);
+        let dy = (this.$y - this.$py);
+        
+        // Compute component of velocity which is orthogonal to the surface normal of the collision.
+        // This is used to compute the 'remaining allowed displacement', basically how much the object 
+        // can slide along the surface after the collision. We reapply this back after pulling the 
+        // object back to the time of collision...
+        let surfVec = minus(segment[1], segment[0]); // Vector in same direction as segment...
+        surfVec = mult(surfVec, 1 / Math.sqrt(dot(surfVec, surfVec))); // Make it a unit vector...
+        let remainingVel = mult(surfVec, dot([dx, dy], surfVec) * (1 - time));
+        
+        this.$x = this.$px + dx * time;
+        this.$y = this.$py + dy * time;
         
         for(let i = 0; i < this.$points.length; i++) {
             let [px, py] = this.$pointsPrior[i];
             let [x, y] = this.$points[i];
             this.$points[i] = [px + (x - px) * time, py + (y - py) * time];
         }
+        
+        this.$x += remainingVel[0];
+        this.$y += remainingVel[1];
     }
     
     get solidFlag() {
@@ -1156,11 +1194,21 @@ class GameCollisionObject extends GameObject {
         return this.$points;
     }
     
-    getBoundingBox() {
-        return this.$boundingBox;
+    getMotionBox() {
+        let minX = Math.min(this.$x, this.$px);
+        let minY = Math.min(this.$y, this.$py);
+        let maxX = Math.max(this.$x, this.$px);
+        let maxY = Math.max(this.$y, this.$py);
+        
+        return [
+            minX + this._$motionBox[0],
+            minY + this._$motionBox[1],
+            (maxX - minX) + this._$motionBox[2],
+            (maxY - minY) + this._$motionBox[3]
+        ];
     }
     
-    handleCollision(otherObj, sideIdx, otherSideIdx, time) {}
+    handleCollision(otherObj, sideIdx, otherSideIdx, time, pointOrSegment) {}
 }
 
 window.GameCollisionObject = GameCollisionObject;
@@ -1360,7 +1408,11 @@ class SweepAndPrune {
         this._visitState = false;
     }
     
-    addEntity(entity) {
+    addEntity(entity) {        
+        if(!("getMotionBox" in entity)) {
+            return false;
+        }
+        
         let addedStuff = false;
         
         for(let i = 0; i < entity.points.length; i++) { 
@@ -1416,12 +1468,14 @@ class SweepAndPrune {
         // Mark all visited objects by flipping the visited flag...
         for(let [x, y, chunk] of loadedChunks) {
             for(let entity of chunk.entities) {
+                if(!("getMotionBox" in entity)) continue;
                 this.addEntity(entity);
                 this._mark(entity);
             }
         }
         
         for(let player of players) {
+            if(!("getMotionBox" in player)) continue;
             this.addEntity(player);
             this._mark(player);
         }
@@ -1508,7 +1562,7 @@ class SweepAndPrune {
                 let box2 = this._segments[arr[j][0]][2];
                 
                 if(obj1 == obj2) continue;
-                
+                                
                 if(collisionHandler.__insideCheck(box1, box2)) {
                     collisionHandler.addCollision(obj1, segment1, obj2, segment2);
                 }
@@ -1534,8 +1588,8 @@ class GameCollisionManager {
         let [ox, oy, ow, oh] = box2;
         
         return (
-            !((x >= (ox + ow)) || ((x + w) <= ox))
-            && !((oy >= (y + h)) || ((oy + oh) <= y))
+            !((x > (ox + ow)) || ((x + w) < ox))
+            && !((oy > (y + h)) || ((oy + oh) < y))
         );
     }
     
@@ -1543,7 +1597,16 @@ class GameCollisionManager {
         let [os1, dos1] = obj1.__getSegmentInfo(segment1);
         let [os2, dos2] = obj2.__getSegmentInfo(segment2);
         
-        return segmentVsSegment(os1, dos1, os2, dos2);
+        let [time, poc, soc] = segmentVsSegment(os1, dos1, os2, dos2);
+        
+        let segmentAtCol = null;
+        let pointAtCol = null;
+        if(time != Infinity) {
+            segmentAtCol = (soc)? pointsAt(os1, dos1, time): pointsAt(os2, dos2, time);
+            pointAtCol = (soc)? pointAt(os2[poc], dos2[poc], time): pointsAt(os1[poc], dos1[poc], time);
+        }
+                
+        return [time, pointAtCol, segmentAtCol];
     }
     
     addCollision(obj1, segment1, obj2, segment2) {
@@ -1558,21 +1621,19 @@ class GameCollisionManager {
         return [obj1, obj2, seg1, seg2, this.__intersection(obj1, seg1, obj2, seg2)[0]];
     }
     
-    resolveCollisions() {        
+    resolveCollisions() {
         while(this._collisions.size > 0) {
             let [obj1, obj2, segment1, segment2, oldTime] = this._collisions.pop();
-            let [time, poc, soc] = this.__intersection(obj1, segment1, obj2, segment2);
-            
-            console.log([time, poc, soc]);
-            
+            let [time, pac, sac] = this.__intersection(obj1, segment1, obj2, segment2);
+                                    
             if((time > 1) || (time < 0)) {
                 continue;
             }
                                     
             // Move both objects....
             if(obj1.solidFlag[segment1] && obj2.solidFlag[segment2]) {
-                obj1.__collisionAdjust(time);
-                obj2.__collisionAdjust(time);
+                obj1.collisionAdjust(time, pac, sac);
+                obj2.collisionAdjust(time, pac, sac);
             }
             
             // For extra functionality...
@@ -1792,16 +1853,16 @@ function _handleCollisions(loadedChunks, chunkLookup, chunkSize, numChunks, play
             // -1 indicates index of the player...
             let entity1 = (i < 0)? players[players.length + i]: chunk.entities[i];
             
-            if(!("__getSegmentBox" in entity1)) continue;
+            if(!("getMotionBox" in entity1)) continue;
             
-            let [x1, y1, w1, h1] = entity1.getBoundingBox();
+            let [x1, y1, w1, h1] = entity1.getMotionBox();
             
             // Handle any entity-block collisions....
             let xbs = boundNFloor(x1, 0, (chunkSize * numChunks[0]) - 1);
             let ybs = boundNFloor(y1, 0, (chunkSize * numChunks[1]) - 1);
             let xbe = boundNFloor(x1 + w1, 0, (chunkSize * numChunks[0]) - 1);
             let ybe = boundNFloor(y1 + h1, 0, (chunkSize * numChunks[1]) - 1);
-                    
+                                
             for(let fbx = xbs; fbx <= xbe; fbx++) {
                 for(let fby = ybs; fby <= ybe; fby++) {
                     // Compute chunk and block in chunk indexes...
@@ -1813,16 +1874,16 @@ function _handleCollisions(loadedChunks, chunkLookup, chunkSize, numChunks, play
                     
                     let block = chunkLookup[[cxb, cyb]].blocks[bx][by]
                     
-                    if((block != null) && ("__getSegmentBox" in block)) {
+                    if((block != null) && ("getMotionBox" in block)) {
                         // If block is not null, perform collision check with entity...
-                        let [x2, y2, w2, h2] = block.getBoundingBox();
-                        
-                        if(collisionManager.__insideCheck([x1, y1, w1, h1], [x2, y2, w2, h2])) {
+                        let [x2, y2, w2, h2] = block.getMotionBox();
+                                                
+                        if(collisionManager.__insideCheck([x1, y1, w1, h1], [x2, y2, w2, h2])) {                            
                             for(let j = 0; j < block.points.length; j++) {
                                 for(let k = 0; k < entity1.points.length; k++) {
                                     let b1 = entity1.__getSegmentBox(k);
                                     let b2 = block.__getSegmentBox(j);
-                                    
+                                                                        
                                     if(collisionManager.__insideCheck(b1, b2)) {
                                         collisionManager.addCollision(entity1, k, block, j);
                                     }
