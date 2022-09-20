@@ -28,8 +28,8 @@ class PhysicsObject extends GameCollisionObject {
     }
 
     handleCollision(otherObj, sideIdx, otherSideIdx, time) {
-        this.vy = 0;
-        this.vx = 0;
+        this.vy *= Math.abs((this.$x - this.$px) - this.vx) > 1e-4;
+        this.vx *= Math.abs((this.$y - this.$py) - this.vy) > 1e-4;
     }
 }
 
@@ -47,10 +47,42 @@ class Entity extends PhysicsObject {
     }
 }
 
+class Slope1 extends GameCollisionObject {
+    constructor(x, y, assets) {
+        super(x, y, assets);
+        this.initPoints([[0, 1], [1, 1], [1, 0]]);
+    }
+
+    draw(canvas, painter, camera) {
+        painter.fillStyle = "green";
+        painter.beginPath();
+        let i = 0;
+        for(let [x, y] of camera.transformList(this.points.map((p) => [p[0] + this.$x, p[1] + this.$y]))) {
+            if(i == 0) painter.moveTo(x, y);
+            else painter.lineTo(x, y);
+            i++;
+        }
+        painter.closePath();
+        painter.fill();
+    }
+    
+    drawPreview(canvas, painter, box) {
+        let [x, y, w, h] = box;
+        painter.fillStyle = "green";
+        painter.beginPath();
+        painter.moveTo(x, y + h);
+        painter.lineTo(x + w, y + h);
+        painter.lineTo(x + w, y);
+        painter.closePath();
+        painter.fill();
+    }
+}
+
 class Player extends PhysicsObject {
     constructor(x, y, assets) {
         super(x, y, assets);
         this._priorUp = false;
+        this._jumpCount = 2;
     }
     
     update(timeStep, gameState) {
@@ -58,13 +90,14 @@ class Player extends PhysicsObject {
         this.vx = 0;
         
         if("ArrowLeft" in keys) {
-            this.vx -= 7.5 / 1000;
+            this.vx -= 16.5 / 1000;
         }
         if("ArrowRight" in keys) {
-            this.vx += 7.5 / 1000;
+            this.vx += 16.5 / 1000;
         }
-        if(!this._priorUp && ("ArrowUp" in keys)) {
-            this.vy -= 30 / 1000;
+        if(!this._priorUp && ("ArrowUp" in keys) && (this._jumpCount > 0)) {
+            this.vy -= 40 / 1000;
+            this._jumpCount -= 1;
         }
         this._priorUp = "ArrowUp" in keys;
 
@@ -83,11 +116,16 @@ class Player extends PhysicsObject {
         painter.fillStyle = "blue";
         painter.fillRect(x, y, w, h);
     }
+    
+    handleCollision(otherObj, sideIdx, otherSideIdx, time) {
+        this._jumpCount = 2;
+        super.handleCollision(otherObj, sideIdx, otherSideIdx, time);
+    }
 }
 
 let gameInfo = {
     objects: {
-        blocks: [GameBlock],
+        blocks: [GameBlock, Slope1],
         entities: [Entity],
         players: [Player]
     },

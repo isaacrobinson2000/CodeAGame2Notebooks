@@ -42,7 +42,41 @@
     "chunks": [
         [
             {
-                "entities": [],
+                "entities": [
+                    {
+                        "__$type": "Entity",
+                        "$x": 4,
+                        "$y": 3,
+                        "$px": 4,
+                        "$py": 3,
+                        "$points": [
+                            [
+                                0,
+                                0
+                            ],
+                            [
+                                0,
+                                1
+                            ],
+                            [
+                                1,
+                                1
+                            ],
+                            [
+                                1,
+                                0
+                            ]
+                        ],
+                        "$solidSides": [
+                            true,
+                            true,
+                            true,
+                            true
+                        ],
+                        "vx": 0,
+                        "vy": 0
+                    }
+                ],
                 "blocks": [
                     [
                         null,
@@ -321,9 +355,99 @@
                                 true
                             ]
                         },
-                        null,
-                        null,
-                        null,
+                        {
+                            "__$type": "GameBlock",
+                            "$x": 5,
+                            "$y": 6,
+                            "$px": 5,
+                            "$py": 6,
+                            "$points": [
+                                [
+                                    0,
+                                    0
+                                ],
+                                [
+                                    0,
+                                    1
+                                ],
+                                [
+                                    1,
+                                    1
+                                ],
+                                [
+                                    1,
+                                    0
+                                ]
+                            ],
+                            "$solidSides": [
+                                true,
+                                true,
+                                true,
+                                true
+                            ]
+                        },
+                        {
+                            "__$type": "GameBlock",
+                            "$x": 5,
+                            "$y": 7,
+                            "$px": 5,
+                            "$py": 7,
+                            "$points": [
+                                [
+                                    0,
+                                    0
+                                ],
+                                [
+                                    0,
+                                    1
+                                ],
+                                [
+                                    1,
+                                    1
+                                ],
+                                [
+                                    1,
+                                    0
+                                ]
+                            ],
+                            "$solidSides": [
+                                true,
+                                true,
+                                true,
+                                true
+                            ]
+                        },
+                        {
+                            "__$type": "GameBlock",
+                            "$x": 5,
+                            "$y": 8,
+                            "$px": 5,
+                            "$py": 8,
+                            "$points": [
+                                [
+                                    0,
+                                    0
+                                ],
+                                [
+                                    0,
+                                    1
+                                ],
+                                [
+                                    1,
+                                    1
+                                ],
+                                [
+                                    1,
+                                    0
+                                ]
+                            ],
+                            "$solidSides": [
+                                true,
+                                true,
+                                true,
+                                true
+                            ]
+                        },
                         null,
                         null,
                         null,
@@ -341,61 +465,37 @@
                         null,
                         null,
                         null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null
-                    ],
-                    [
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null
-                    ],
-                    [
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null
-                    ],
-                    [
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
+                        {
+                            "__$type": "GameBlock",
+                            "$x": 6,
+                            "$y": 8,
+                            "$px": 6,
+                            "$py": 8,
+                            "$points": [
+                                [
+                                    0,
+                                    0
+                                ],
+                                [
+                                    0,
+                                    1
+                                ],
+                                [
+                                    1,
+                                    1
+                                ],
+                                [
+                                    1,
+                                    0
+                                ]
+                            ],
+                            "$solidSides": [
+                                true,
+                                true,
+                                true,
+                                true
+                            ]
+                        },
                         null,
                         null,
                         null,
@@ -413,61 +513,37 @@
                         null,
                         null,
                         null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null
-                    ],
-                    [
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null
-                    ],
-                    [
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null
-                    ],
-                    [
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
+                        {
+                            "__$type": "GameBlock",
+                            "$x": 7,
+                            "$y": 8,
+                            "$px": 7,
+                            "$py": 8,
+                            "$points": [
+                                [
+                                    0,
+                                    0
+                                ],
+                                [
+                                    0,
+                                    1
+                                ],
+                                [
+                                    1,
+                                    1
+                                ],
+                                [
+                                    1,
+                                    0
+                                ]
+                            ],
+                            "$solidSides": [
+                                true,
+                                true,
+                                true,
+                                true
+                            ]
+                        },
                         null,
                         null,
                         null,
@@ -484,8 +560,77 @@
                         null,
                         null,
                         null,
-                        null,
-                        null,
+                        {
+                            "__$type": "Slope1",
+                            "$x": 8,
+                            "$y": 7,
+                            "$px": 8,
+                            "$py": 7,
+                            "$points": [
+                                [
+                                    0,
+                                    1
+                                ],
+                                [
+                                    1,
+                                    1
+                                ],
+                                [
+                                    1,
+                                    0
+                                ]
+                            ],
+                            "$solidSides": [
+                                true,
+                                true,
+                                true
+                            ],
+                            "$pointsPrior": [
+                                [
+                                    0,
+                                    1
+                                ],
+                                [
+                                    1,
+                                    1
+                                ],
+                                [
+                                    1,
+                                    0
+                                ]
+                            ]
+                        },
+                        {
+                            "__$type": "GameBlock",
+                            "$x": 8,
+                            "$y": 8,
+                            "$px": 8,
+                            "$py": 8,
+                            "$points": [
+                                [
+                                    0,
+                                    0
+                                ],
+                                [
+                                    0,
+                                    1
+                                ],
+                                [
+                                    1,
+                                    1
+                                ],
+                                [
+                                    1,
+                                    0
+                                ]
+                            ],
+                            "$solidSides": [
+                                true,
+                                true,
+                                true,
+                                true
+                            ]
+                        },
                         null,
                         null,
                         null,
@@ -501,9 +646,1104 @@
                         null,
                         null,
                         null,
+                        {
+                            "__$type": "Slope1",
+                            "$x": 9,
+                            "$y": 6,
+                            "$px": 9,
+                            "$py": 6,
+                            "$points": [
+                                [
+                                    0,
+                                    1
+                                ],
+                                [
+                                    1,
+                                    1
+                                ],
+                                [
+                                    1,
+                                    0
+                                ]
+                            ],
+                            "$solidSides": [
+                                true,
+                                true,
+                                true
+                            ],
+                            "$pointsPrior": [
+                                [
+                                    0,
+                                    1
+                                ],
+                                [
+                                    1,
+                                    1
+                                ],
+                                [
+                                    1,
+                                    0
+                                ]
+                            ]
+                        },
+                        {
+                            "__$type": "GameBlock",
+                            "$x": 9,
+                            "$y": 7,
+                            "$px": 9,
+                            "$py": 7,
+                            "$points": [
+                                [
+                                    0,
+                                    0
+                                ],
+                                [
+                                    0,
+                                    1
+                                ],
+                                [
+                                    1,
+                                    1
+                                ],
+                                [
+                                    1,
+                                    0
+                                ]
+                            ],
+                            "$solidSides": [
+                                true,
+                                true,
+                                true,
+                                true
+                            ]
+                        },
+                        {
+                            "__$type": "GameBlock",
+                            "$x": 9,
+                            "$y": 8,
+                            "$px": 9,
+                            "$py": 8,
+                            "$points": [
+                                [
+                                    0,
+                                    0
+                                ],
+                                [
+                                    0,
+                                    1
+                                ],
+                                [
+                                    1,
+                                    1
+                                ],
+                                [
+                                    1,
+                                    0
+                                ]
+                            ],
+                            "$solidSides": [
+                                true,
+                                true,
+                                true,
+                                true
+                            ]
+                        },
                         null,
                         null,
                         null,
+                        null,
+                        null,
+                        null,
+                        null
+                    ],
+                    [
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        {
+                            "__$type": "Slope1",
+                            "$x": 10,
+                            "$y": 5,
+                            "$px": 10,
+                            "$py": 5,
+                            "$points": [
+                                [
+                                    0,
+                                    1
+                                ],
+                                [
+                                    1,
+                                    1
+                                ],
+                                [
+                                    1,
+                                    0
+                                ]
+                            ],
+                            "$solidSides": [
+                                true,
+                                true,
+                                true
+                            ],
+                            "$pointsPrior": [
+                                [
+                                    0,
+                                    1
+                                ],
+                                [
+                                    1,
+                                    1
+                                ],
+                                [
+                                    1,
+                                    0
+                                ]
+                            ]
+                        },
+                        {
+                            "__$type": "GameBlock",
+                            "$x": 10,
+                            "$y": 6,
+                            "$px": 10,
+                            "$py": 6,
+                            "$points": [
+                                [
+                                    0,
+                                    0
+                                ],
+                                [
+                                    0,
+                                    1
+                                ],
+                                [
+                                    1,
+                                    1
+                                ],
+                                [
+                                    1,
+                                    0
+                                ]
+                            ],
+                            "$solidSides": [
+                                true,
+                                true,
+                                true,
+                                true
+                            ]
+                        },
+                        {
+                            "__$type": "GameBlock",
+                            "$x": 10,
+                            "$y": 7,
+                            "$px": 10,
+                            "$py": 7,
+                            "$points": [
+                                [
+                                    0,
+                                    0
+                                ],
+                                [
+                                    0,
+                                    1
+                                ],
+                                [
+                                    1,
+                                    1
+                                ],
+                                [
+                                    1,
+                                    0
+                                ]
+                            ],
+                            "$solidSides": [
+                                true,
+                                true,
+                                true,
+                                true
+                            ]
+                        },
+                        {
+                            "__$type": "GameBlock",
+                            "$x": 10,
+                            "$y": 8,
+                            "$px": 10,
+                            "$py": 8,
+                            "$points": [
+                                [
+                                    0,
+                                    0
+                                ],
+                                [
+                                    0,
+                                    1
+                                ],
+                                [
+                                    1,
+                                    1
+                                ],
+                                [
+                                    1,
+                                    0
+                                ]
+                            ],
+                            "$solidSides": [
+                                true,
+                                true,
+                                true,
+                                true
+                            ]
+                        },
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null
+                    ],
+                    [
+                        null,
+                        null,
+                        null,
+                        null,
+                        {
+                            "__$type": "Slope1",
+                            "$x": 11,
+                            "$y": 4,
+                            "$px": 11,
+                            "$py": 4,
+                            "$points": [
+                                [
+                                    0,
+                                    1
+                                ],
+                                [
+                                    1,
+                                    1
+                                ],
+                                [
+                                    1,
+                                    0
+                                ]
+                            ],
+                            "$solidSides": [
+                                true,
+                                true,
+                                true
+                            ],
+                            "$pointsPrior": [
+                                [
+                                    0,
+                                    1
+                                ],
+                                [
+                                    1,
+                                    1
+                                ],
+                                [
+                                    1,
+                                    0
+                                ]
+                            ]
+                        },
+                        {
+                            "__$type": "GameBlock",
+                            "$x": 11,
+                            "$y": 5,
+                            "$px": 11,
+                            "$py": 5,
+                            "$points": [
+                                [
+                                    0,
+                                    0
+                                ],
+                                [
+                                    0,
+                                    1
+                                ],
+                                [
+                                    1,
+                                    1
+                                ],
+                                [
+                                    1,
+                                    0
+                                ]
+                            ],
+                            "$solidSides": [
+                                true,
+                                true,
+                                true,
+                                true
+                            ]
+                        },
+                        {
+                            "__$type": "GameBlock",
+                            "$x": 11,
+                            "$y": 6,
+                            "$px": 11,
+                            "$py": 6,
+                            "$points": [
+                                [
+                                    0,
+                                    0
+                                ],
+                                [
+                                    0,
+                                    1
+                                ],
+                                [
+                                    1,
+                                    1
+                                ],
+                                [
+                                    1,
+                                    0
+                                ]
+                            ],
+                            "$solidSides": [
+                                true,
+                                true,
+                                true,
+                                true
+                            ]
+                        },
+                        {
+                            "__$type": "GameBlock",
+                            "$x": 11,
+                            "$y": 7,
+                            "$px": 11,
+                            "$py": 7,
+                            "$points": [
+                                [
+                                    0,
+                                    0
+                                ],
+                                [
+                                    0,
+                                    1
+                                ],
+                                [
+                                    1,
+                                    1
+                                ],
+                                [
+                                    1,
+                                    0
+                                ]
+                            ],
+                            "$solidSides": [
+                                true,
+                                true,
+                                true,
+                                true
+                            ]
+                        },
+                        {
+                            "__$type": "GameBlock",
+                            "$x": 11,
+                            "$y": 8,
+                            "$px": 11,
+                            "$py": 8,
+                            "$points": [
+                                [
+                                    0,
+                                    0
+                                ],
+                                [
+                                    0,
+                                    1
+                                ],
+                                [
+                                    1,
+                                    1
+                                ],
+                                [
+                                    1,
+                                    0
+                                ]
+                            ],
+                            "$solidSides": [
+                                true,
+                                true,
+                                true,
+                                true
+                            ]
+                        },
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null
+                    ],
+                    [
+                        null,
+                        null,
+                        null,
+                        null,
+                        {
+                            "__$type": "GameBlock",
+                            "$x": 12,
+                            "$y": 4,
+                            "$px": 12,
+                            "$py": 4,
+                            "$points": [
+                                [
+                                    0,
+                                    0
+                                ],
+                                [
+                                    0,
+                                    1
+                                ],
+                                [
+                                    1,
+                                    1
+                                ],
+                                [
+                                    1,
+                                    0
+                                ]
+                            ],
+                            "$solidSides": [
+                                true,
+                                true,
+                                true,
+                                true
+                            ]
+                        },
+                        {
+                            "__$type": "GameBlock",
+                            "$x": 12,
+                            "$y": 5,
+                            "$px": 12,
+                            "$py": 5,
+                            "$points": [
+                                [
+                                    0,
+                                    0
+                                ],
+                                [
+                                    0,
+                                    1
+                                ],
+                                [
+                                    1,
+                                    1
+                                ],
+                                [
+                                    1,
+                                    0
+                                ]
+                            ],
+                            "$solidSides": [
+                                true,
+                                true,
+                                true,
+                                true
+                            ]
+                        },
+                        {
+                            "__$type": "GameBlock",
+                            "$x": 12,
+                            "$y": 6,
+                            "$px": 12,
+                            "$py": 6,
+                            "$points": [
+                                [
+                                    0,
+                                    0
+                                ],
+                                [
+                                    0,
+                                    1
+                                ],
+                                [
+                                    1,
+                                    1
+                                ],
+                                [
+                                    1,
+                                    0
+                                ]
+                            ],
+                            "$solidSides": [
+                                true,
+                                true,
+                                true,
+                                true
+                            ]
+                        },
+                        {
+                            "__$type": "GameBlock",
+                            "$x": 12,
+                            "$y": 7,
+                            "$px": 12,
+                            "$py": 7,
+                            "$points": [
+                                [
+                                    0,
+                                    0
+                                ],
+                                [
+                                    0,
+                                    1
+                                ],
+                                [
+                                    1,
+                                    1
+                                ],
+                                [
+                                    1,
+                                    0
+                                ]
+                            ],
+                            "$solidSides": [
+                                true,
+                                true,
+                                true,
+                                true
+                            ]
+                        },
+                        {
+                            "__$type": "GameBlock",
+                            "$x": 12,
+                            "$y": 8,
+                            "$px": 12,
+                            "$py": 8,
+                            "$points": [
+                                [
+                                    0,
+                                    0
+                                ],
+                                [
+                                    0,
+                                    1
+                                ],
+                                [
+                                    1,
+                                    1
+                                ],
+                                [
+                                    1,
+                                    0
+                                ]
+                            ],
+                            "$solidSides": [
+                                true,
+                                true,
+                                true,
+                                true
+                            ]
+                        },
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null
+                    ],
+                    [
+                        null,
+                        null,
+                        null,
+                        null,
+                        {
+                            "__$type": "GameBlock",
+                            "$x": 13,
+                            "$y": 4,
+                            "$px": 13,
+                            "$py": 4,
+                            "$points": [
+                                [
+                                    0,
+                                    0
+                                ],
+                                [
+                                    0,
+                                    1
+                                ],
+                                [
+                                    1,
+                                    1
+                                ],
+                                [
+                                    1,
+                                    0
+                                ]
+                            ],
+                            "$solidSides": [
+                                true,
+                                true,
+                                true,
+                                true
+                            ]
+                        },
+                        {
+                            "__$type": "GameBlock",
+                            "$x": 13,
+                            "$y": 5,
+                            "$px": 13,
+                            "$py": 5,
+                            "$points": [
+                                [
+                                    0,
+                                    0
+                                ],
+                                [
+                                    0,
+                                    1
+                                ],
+                                [
+                                    1,
+                                    1
+                                ],
+                                [
+                                    1,
+                                    0
+                                ]
+                            ],
+                            "$solidSides": [
+                                true,
+                                true,
+                                true,
+                                true
+                            ]
+                        },
+                        {
+                            "__$type": "GameBlock",
+                            "$x": 13,
+                            "$y": 6,
+                            "$px": 13,
+                            "$py": 6,
+                            "$points": [
+                                [
+                                    0,
+                                    0
+                                ],
+                                [
+                                    0,
+                                    1
+                                ],
+                                [
+                                    1,
+                                    1
+                                ],
+                                [
+                                    1,
+                                    0
+                                ]
+                            ],
+                            "$solidSides": [
+                                true,
+                                true,
+                                true,
+                                true
+                            ]
+                        },
+                        {
+                            "__$type": "GameBlock",
+                            "$x": 13,
+                            "$y": 7,
+                            "$px": 13,
+                            "$py": 7,
+                            "$points": [
+                                [
+                                    0,
+                                    0
+                                ],
+                                [
+                                    0,
+                                    1
+                                ],
+                                [
+                                    1,
+                                    1
+                                ],
+                                [
+                                    1,
+                                    0
+                                ]
+                            ],
+                            "$solidSides": [
+                                true,
+                                true,
+                                true,
+                                true
+                            ]
+                        },
+                        {
+                            "__$type": "GameBlock",
+                            "$x": 13,
+                            "$y": 8,
+                            "$px": 13,
+                            "$py": 8,
+                            "$points": [
+                                [
+                                    0,
+                                    0
+                                ],
+                                [
+                                    0,
+                                    1
+                                ],
+                                [
+                                    1,
+                                    1
+                                ],
+                                [
+                                    1,
+                                    0
+                                ]
+                            ],
+                            "$solidSides": [
+                                true,
+                                true,
+                                true,
+                                true
+                            ]
+                        },
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null
+                    ],
+                    [
+                        null,
+                        null,
+                        null,
+                        null,
+                        {
+                            "__$type": "GameBlock",
+                            "$x": 14,
+                            "$y": 4,
+                            "$px": 14,
+                            "$py": 4,
+                            "$points": [
+                                [
+                                    0,
+                                    0
+                                ],
+                                [
+                                    0,
+                                    1
+                                ],
+                                [
+                                    1,
+                                    1
+                                ],
+                                [
+                                    1,
+                                    0
+                                ]
+                            ],
+                            "$solidSides": [
+                                true,
+                                true,
+                                true,
+                                true
+                            ]
+                        },
+                        {
+                            "__$type": "GameBlock",
+                            "$x": 14,
+                            "$y": 5,
+                            "$px": 14,
+                            "$py": 5,
+                            "$points": [
+                                [
+                                    0,
+                                    0
+                                ],
+                                [
+                                    0,
+                                    1
+                                ],
+                                [
+                                    1,
+                                    1
+                                ],
+                                [
+                                    1,
+                                    0
+                                ]
+                            ],
+                            "$solidSides": [
+                                true,
+                                true,
+                                true,
+                                true
+                            ]
+                        },
+                        {
+                            "__$type": "GameBlock",
+                            "$x": 14,
+                            "$y": 6,
+                            "$px": 14,
+                            "$py": 6,
+                            "$points": [
+                                [
+                                    0,
+                                    0
+                                ],
+                                [
+                                    0,
+                                    1
+                                ],
+                                [
+                                    1,
+                                    1
+                                ],
+                                [
+                                    1,
+                                    0
+                                ]
+                            ],
+                            "$solidSides": [
+                                true,
+                                true,
+                                true,
+                                true
+                            ]
+                        },
+                        {
+                            "__$type": "GameBlock",
+                            "$x": 14,
+                            "$y": 7,
+                            "$px": 14,
+                            "$py": 7,
+                            "$points": [
+                                [
+                                    0,
+                                    0
+                                ],
+                                [
+                                    0,
+                                    1
+                                ],
+                                [
+                                    1,
+                                    1
+                                ],
+                                [
+                                    1,
+                                    0
+                                ]
+                            ],
+                            "$solidSides": [
+                                true,
+                                true,
+                                true,
+                                true
+                            ]
+                        },
+                        {
+                            "__$type": "GameBlock",
+                            "$x": 14,
+                            "$y": 8,
+                            "$px": 14,
+                            "$py": 8,
+                            "$points": [
+                                [
+                                    0,
+                                    0
+                                ],
+                                [
+                                    0,
+                                    1
+                                ],
+                                [
+                                    1,
+                                    1
+                                ],
+                                [
+                                    1,
+                                    0
+                                ]
+                            ],
+                            "$solidSides": [
+                                true,
+                                true,
+                                true,
+                                true
+                            ]
+                        },
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null
+                    ],
+                    [
+                        null,
+                        null,
+                        null,
+                        null,
+                        {
+                            "__$type": "GameBlock",
+                            "$x": 15,
+                            "$y": 4,
+                            "$px": 15,
+                            "$py": 4,
+                            "$points": [
+                                [
+                                    0,
+                                    0
+                                ],
+                                [
+                                    0,
+                                    1
+                                ],
+                                [
+                                    1,
+                                    1
+                                ],
+                                [
+                                    1,
+                                    0
+                                ]
+                            ],
+                            "$solidSides": [
+                                true,
+                                true,
+                                true,
+                                true
+                            ]
+                        },
+                        {
+                            "__$type": "GameBlock",
+                            "$x": 15,
+                            "$y": 5,
+                            "$px": 15,
+                            "$py": 5,
+                            "$points": [
+                                [
+                                    0,
+                                    0
+                                ],
+                                [
+                                    0,
+                                    1
+                                ],
+                                [
+                                    1,
+                                    1
+                                ],
+                                [
+                                    1,
+                                    0
+                                ]
+                            ],
+                            "$solidSides": [
+                                true,
+                                true,
+                                true,
+                                true
+                            ]
+                        },
+                        {
+                            "__$type": "GameBlock",
+                            "$x": 15,
+                            "$y": 6,
+                            "$px": 15,
+                            "$py": 6,
+                            "$points": [
+                                [
+                                    0,
+                                    0
+                                ],
+                                [
+                                    0,
+                                    1
+                                ],
+                                [
+                                    1,
+                                    1
+                                ],
+                                [
+                                    1,
+                                    0
+                                ]
+                            ],
+                            "$solidSides": [
+                                true,
+                                true,
+                                true,
+                                true
+                            ]
+                        },
+                        {
+                            "__$type": "GameBlock",
+                            "$x": 15,
+                            "$y": 7,
+                            "$px": 15,
+                            "$py": 7,
+                            "$points": [
+                                [
+                                    0,
+                                    0
+                                ],
+                                [
+                                    0,
+                                    1
+                                ],
+                                [
+                                    1,
+                                    1
+                                ],
+                                [
+                                    1,
+                                    0
+                                ]
+                            ],
+                            "$solidSides": [
+                                true,
+                                true,
+                                true,
+                                true
+                            ]
+                        },
+                        {
+                            "__$type": "GameBlock",
+                            "$x": 15,
+                            "$y": 8,
+                            "$px": 15,
+                            "$py": 8,
+                            "$points": [
+                                [
+                                    0,
+                                    0
+                                ],
+                                [
+                                    0,
+                                    1
+                                ],
+                                [
+                                    1,
+                                    1
+                                ],
+                                [
+                                    1,
+                                    0
+                                ]
+                            ],
+                            "$solidSides": [
+                                true,
+                                true,
+                                true,
+                                true
+                            ]
+                        },
                         null,
                         null,
                         null,
@@ -3161,11 +4401,161 @@
                         null,
                         null,
                         null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
+                        {
+                            "__$type": "GameBlock",
+                            "$x": 16,
+                            "$y": 4,
+                            "$px": 16,
+                            "$py": 4,
+                            "$points": [
+                                [
+                                    0,
+                                    0
+                                ],
+                                [
+                                    0,
+                                    1
+                                ],
+                                [
+                                    1,
+                                    1
+                                ],
+                                [
+                                    1,
+                                    0
+                                ]
+                            ],
+                            "$solidSides": [
+                                true,
+                                true,
+                                true,
+                                true
+                            ]
+                        },
+                        {
+                            "__$type": "GameBlock",
+                            "$x": 16,
+                            "$y": 5,
+                            "$px": 16,
+                            "$py": 5,
+                            "$points": [
+                                [
+                                    0,
+                                    0
+                                ],
+                                [
+                                    0,
+                                    1
+                                ],
+                                [
+                                    1,
+                                    1
+                                ],
+                                [
+                                    1,
+                                    0
+                                ]
+                            ],
+                            "$solidSides": [
+                                true,
+                                true,
+                                true,
+                                true
+                            ]
+                        },
+                        {
+                            "__$type": "GameBlock",
+                            "$x": 16,
+                            "$y": 6,
+                            "$px": 16,
+                            "$py": 6,
+                            "$points": [
+                                [
+                                    0,
+                                    0
+                                ],
+                                [
+                                    0,
+                                    1
+                                ],
+                                [
+                                    1,
+                                    1
+                                ],
+                                [
+                                    1,
+                                    0
+                                ]
+                            ],
+                            "$solidSides": [
+                                true,
+                                true,
+                                true,
+                                true
+                            ]
+                        },
+                        {
+                            "__$type": "GameBlock",
+                            "$x": 16,
+                            "$y": 7,
+                            "$px": 16,
+                            "$py": 7,
+                            "$points": [
+                                [
+                                    0,
+                                    0
+                                ],
+                                [
+                                    0,
+                                    1
+                                ],
+                                [
+                                    1,
+                                    1
+                                ],
+                                [
+                                    1,
+                                    0
+                                ]
+                            ],
+                            "$solidSides": [
+                                true,
+                                true,
+                                true,
+                                true
+                            ]
+                        },
+                        {
+                            "__$type": "GameBlock",
+                            "$x": 16,
+                            "$y": 8,
+                            "$px": 16,
+                            "$py": 8,
+                            "$points": [
+                                [
+                                    0,
+                                    0
+                                ],
+                                [
+                                    0,
+                                    1
+                                ],
+                                [
+                                    1,
+                                    1
+                                ],
+                                [
+                                    1,
+                                    0
+                                ]
+                            ],
+                            "$solidSides": [
+                                true,
+                                true,
+                                true,
+                                true
+                            ]
+                        },
                         null,
                         null,
                         null,

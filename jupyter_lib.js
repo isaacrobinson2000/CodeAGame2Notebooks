@@ -17,6 +17,28 @@ elem_proto.print = function(obj){
     this.append((obj === undefined)? "": obj);
 };
 
+window.debugDrawer = {
+    enabled: false,
+    commands: [],
+    add: function(drawCmd) {
+        if(this.enabled) {
+            this.commands.push(drawCmd);
+        }
+        else {
+            this.commands.length = 0;
+        }
+    },
+    draw: function(canvas, painter, camera) {
+        if(this.enabled) {
+            for(let cmd of this.commands) {
+                cmd(canvas, painter, camera);
+            }
+        }
+        this.commands.length = 0;
+    }
+}
+    
+
 // canvas.getBoundingClientRect() 
 // window.requestAnimationFrame
 elem_proto.getCanvasAndPainter = function(width, height, stretch = true, heightStretch = false) {
@@ -607,6 +629,10 @@ class Camera {
         ];
     }
     
+    transformList(pointList) {
+        return pointList.map((p) => this.transform(p));
+    }
+    
     transformBox(box) {
         let [x, y, w, h] = box;
         
@@ -873,12 +899,20 @@ function _makeEmptyChunk(chunkSize) {
     return chunk;
 }
 
+function arrayEq(a, b) {
+    return (
+        Array.isArray(a) && Array.isArray(b)
+        && (a.length == b.length)
+        && (a.every((v, i) => (Array.isArray(v))? arrayEq(v, b[i]): v == b[i]))
+    );
+}
+
 class GameObject {
     constructor(x, y, assets) {
         this.$x = x;
         this.$y = y;
         this._$zorder = 0;
-        this._$boundingBox = [0, 0, 1, 1];
+        this._$boundingBox = GameObject.DEFAULT_BOUND_BOX;
     }
     
     // The $ functions are the ones that are actually called... Used for implementing hook-like features in subclasses...
@@ -933,6 +967,10 @@ class GameObject {
         return obj;
     }
     
+    _hasDefaultBoundingBox() {
+        return arrayEq(this._$boundingBox, GameObject.DEFAULT_BOUND_BOX);
+    }
+    
     getBoundingBox() {
         return [
             this.$x + this._$boundingBox[0],
@@ -948,6 +986,7 @@ class GameObject {
 }
 
 GameObject.Z_ORDER = 0;
+GameObject.DEFAULT_BOUND_BOX = [0, 0, 1, 1];
 window.GameObject = GameObject;
 
 
@@ -977,9 +1016,12 @@ function dot(point1, point2) {
 }
 
 function segmentDist(point, dpoint, segment, dsegment, time) {
-    let pointVec = minus(pointAt(point, dpoint, time), pointAt(segment[0], dsegment[0], time));
-    let segVec = minus(pointAt(segment[1], dsegment[1], time), pointAt(segment[0], dsegment[0], time));
-    return Math.sqrt(dot(pointVec, pointVec) / dot(segVec, segVec));
+    let s0 = pointAt(segment[0], dsegment[0], time);
+    let pointVec = minus(pointAt(point, dpoint, time), s0);
+    let segVec = minus(pointAt(segment[1], dsegment[1], time), s0);
+    segVec = mult(segVec, 1 / dot(segVec, segVec));
+    
+    return dot(pointVec, segVec);
 }
 
 function surfaceNorm(point1, point2) {
@@ -1066,7 +1108,7 @@ class GameCollisionObject extends GameObject {
         this.$px = x;
         this.$py = y;
         
-        this.$points = [[0, 0], [0, 1], [1, 1], [1, 0]];
+        this.$points = GameCollisionObject.DEFAULT_POINTS;
         this.$solidSides = [true, true, true, true];
         this._$boundingBox = [0, 0, 1, 1];
         this._$motionBox = [0, 0, 1, 1];
@@ -1160,7 +1202,7 @@ class GameCollisionObject extends GameObject {
     }
     
     collisionAdjust(time, point, segment) {
-        time = time - 1e-8;
+        time = Math.max(0, time - 1e-8);
         
         let dx = (this.$x - this.$px);
         let dy = (this.$y - this.$py);
@@ -1171,6 +1213,7 @@ class GameCollisionObject extends GameObject {
         // object back to the time of collision...
         let surfVec = minus(segment[1], segment[0]); // Vector in same direction as segment...
         surfVec = mult(surfVec, 1 / Math.sqrt(dot(surfVec, surfVec))); // Make it a unit vector...
+        
         let remainingVel = mult(surfVec, dot([dx, dy], surfVec) * (1 - time));
         
         this.$x = this.$px + dx * time;
@@ -1194,6 +1237,10 @@ class GameCollisionObject extends GameObject {
         return this.$points;
     }
     
+    _hasDefaultBoundingBox() {
+        return arrayEq(this.$points, GameCollisionObject.DEFAULT_POINTS);
+    }
+    
     getMotionBox() {
         let minX = Math.min(this.$x, this.$px);
         let minY = Math.min(this.$y, this.$py);
@@ -1211,14 +1258,16 @@ class GameCollisionObject extends GameObject {
     handleCollision(otherObj, sideIdx, otherSideIdx, time, pointOrSegment) {}
 }
 
+GameCollisionObject.DEFAULT_POINTS = [[0, 0], [0, 1], [1, 1], [1, 0]];
 window.GameCollisionObject = GameCollisionObject;
 
 class CollisionHeap {
-    constructor() {
+    constructor(isLess) {
         this._array = [];
         this._box2indexes = new Map();
         this._objects = new Map();
         this._objectCounter = 0;
+        this._isLess = isLess;
     }
     
     _swap(index1, index2) {
@@ -1241,13 +1290,11 @@ class CollisionHeap {
             let child2Idx = index * 2 + 2;
             let val1 = this._array[child1Idx];
             let val2 = this._array[child2Idx];
-            val1 = (val1 == undefined)? val1: val1[4];
-            val2 = (val2 == undefined)? val2: val2[4];
             
             if(val1 == undefined && val2 == undefined) return;
-            let smallerIdx = (val2 == undefined || val1 < val2)? child1Idx: child2Idx;
+            let smallerIdx = (val2 == undefined || this._isLess(val1, val2))? child1Idx: child2Idx;
             
-            if(this._array[index][4] < this._array[smallerIdx][4]) return;
+            if(this._isLess(this._array[index], this._array[smallerIdx])) return;
             this._swap(index, smallerIdx);
             index = smallerIdx;
         }
@@ -1258,13 +1305,15 @@ class CollisionHeap {
             if(index <= 0) return;
             
             let parent = Math.floor((index - 1) / 2);
-            if(this._array[parent][4] < this._array[index][4]) return;
+            if(this._isLess(this._array[parent], this._array[index])) return;
             this._swap(index, parent);
             index = parent;
         }
     }
     
     _to_idx(obj, boxIdx) {
+        if(this._objects.get(obj) == undefined) throw "Object not registered correctly in HEAP!";
+        
         return this._objects.get(obj) + "," + boxIdx;
     }
     
@@ -1274,31 +1323,29 @@ class CollisionHeap {
         
         if(!this._box2indexes.has(idx1)) this._box2indexes.set(idx1, new Map());
         if(!this._box2indexes.has(idx2)) this._box2indexes.set(idx2, new Map());
-        
+                
         this._box2indexes.get(idx1).set(idx2, value);
         this._box2indexes.get(idx2).set(idx1, value);
     }
     
-    _delete_mapping(obj1, seg1, obj2, seg2, value) {
+    _delete_mapping(obj1, seg1, obj2, seg2) {
         let idx1 = this._to_idx(obj1, seg1);
         let idx2 = this._to_idx(obj2, seg2);
         
         this._box2indexes.get(idx1).delete(idx2);
         this._box2indexes.get(idx2).delete(idx1);
-        
+                
         if(this._box2indexes.get(idx1).size == 0) {
             this._box2indexes.delete(idx1);
-            this._objects.delete(obj1);
         }
         if(this._box2indexes.get(idx2).size == 0) {
             this._box2indexes.delete(idx2);
-            this._objects.delete(obj2);
         }
     }
     
     push(collisionInfoList) {
         let [obj1, obj2, seg1, seg2, time] = collisionInfoList;
-        
+                
         if(!this._objects.has(obj1)) this._objects.set(obj1, this._objectCounter++);
         if(!this._objects.has(obj2)) this._objects.set(obj2, this._objectCounter++);
         
@@ -1330,14 +1377,14 @@ class CollisionHeap {
     update(collisionInfoList) {
         let [obj1, obj2, seg1, seg2, time] = collisionInfoList;
         
-        let idx1 = this._to_idx(obj1, i);
-        let idx2 = this._to_idx(obj2, j);
+        let idx1 = this._to_idx(obj1, seg1);
+        let idx2 = this._to_idx(obj2, seg2);
         
-        let heapLocation = this._box2indexes.get(obj1).get(obj2);
-        let origT = this._array[heapLocation][4];
+        let heapLocation = this._box2indexes.get(idx1).get(idx2);
+        let origInfoList = this._array[heapLocation];
         this._array[heapLocation] = collisionInfoList;
         
-        if(bestTime > origT) {
+        if(this._isLess(origInfoList, collisionInfoList)) {
             this._sink(heapLocation);
         }
         else {
@@ -1580,7 +1627,11 @@ class SweepAndPrune {
 
 class GameCollisionManager {
     constructor() {
-        this._collisions = new CollisionHeap();
+        this._collisions = new CollisionHeap((a, b) => {
+            let [aob1, aob2, aseg1, aseg2, atime, aoverlap] = a;
+            let [bob1, bob2, bseg1, bseg2, btime, boverlap] = b;
+            return (atime == btime)? aoverlap > boverlap: atime < btime;
+        });
     }
     
     __insideCheck(box1, box2) {
@@ -1593,6 +1644,20 @@ class GameCollisionManager {
         );
     }
     
+    __segmentOverlapScore(segment1, segment2) {
+        // Project segment 2 onto segment 1's vector space...        
+        let segVec1 = minus(segment1[1], segment1[0]);
+        segVec1 = mult(segVec1, 1 / dot(segVec1, segVec1));
+        let p1 = dot(minus(segment2[0], segment1[0]), segVec1);
+        let p2 = dot(minus(segment2[1], segment1[0]), segVec1);
+        
+        // Compute the intersection score...
+        p1 = Math.max(0, Math.min(1, p1));
+        p2 = Math.max(0, Math.min(1, p2));
+        
+        return Math.abs(p2 - p1);
+    }
+    
     __intersection(obj1, segment1, obj2, segment2) {
         let [os1, dos1] = obj1.__getSegmentInfo(segment1);
         let [os2, dos2] = obj2.__getSegmentInfo(segment2);
@@ -1601,34 +1666,50 @@ class GameCollisionManager {
         
         let segmentAtCol = null;
         let pointAtCol = null;
+        let overlap = -1;
         if(time != Infinity) {
-            segmentAtCol = (soc)? pointsAt(os1, dos1, time): pointsAt(os2, dos2, time);
-            pointAtCol = (soc)? pointAt(os2[poc], dos2[poc], time): pointsAt(os1[poc], dos1[poc], time);
+            segmentAtCol = (soc)? pointsAt(os2, dos2, time): pointsAt(os1, dos1, time);
+            pointAtCol = (soc)? pointAt(os1[poc], dos1[poc], time): pointAt(os2[poc], dos2[poc], time);
+            overlap = this.__segmentOverlapScore((soc)? pointsAt(os1, dos1, time): pointsAt(os2, dos2, time), segmentAtCol);
         }
                 
-        return [time, pointAtCol, segmentAtCol];
+        return [time, pointAtCol, segmentAtCol, overlap];
     }
     
     addCollision(obj1, segment1, obj2, segment2) {
         if((obj1 instanceof GameCollisionObject) && (obj2 instanceof GameCollisionObject)) {
-            let [time, pointIdx, segment] = this.__intersection(obj1, segment1, obj2, segment2);
-            this._collisions.push([obj1, obj2, segment1, segment2, time]);
+            let [time, pointIdx, segment, overlap] = this.__intersection(obj1, segment1, obj2, segment2);
+            this._collisions.push([obj1, obj2, segment1, segment2, time, overlap]);
         }
     }
     
     _updateCollisionTime(collisionData) {
         let [obj1, obj2, seg1, seg2, time] = collisionData;
-        return [obj1, obj2, seg1, seg2, this.__intersection(obj1, seg1, obj2, seg2)[0]];
+        let [newTime, pac, sac, overlap] = this.__intersection(obj1, seg1, obj2, seg2);
+        return [obj1, obj2, seg1, seg2, newTime, overlap];
     }
     
-    resolveCollisions() {
+    resolveCollisions() {        
         while(this._collisions.size > 0) {
-            let [obj1, obj2, segment1, segment2, oldTime] = this._collisions.pop();
-            let [time, pac, sac] = this.__intersection(obj1, segment1, obj2, segment2);
+            let [obj1, obj2, segment1, segment2, oldTime, oldOverlap] = this._collisions.pop();
+            let [time, pac, sac, overlap] = this.__intersection(obj1, segment1, obj2, segment2);
                                     
-            if((time > 1) || (time < 0)) {
+            if((time > 1) || (time < 0) || (overlap <= 0)) {
                 continue;
             }
+            
+            debugDrawer.add((canvas, painter, camera) => {
+                let pac2 = camera.transform(pac);
+                let sac2 = [camera.transform(sac[0]), camera.transform(sac[1])];
+                painter.fillStyle = "red";
+                painter.fillRect(pac2[0] - 3, pac2[1] - 3, 7, 7);
+                painter.fillText(time.toExponential(3), pac2[0], pac2[1]);
+                painter.strokeStyle = "red";
+                painter.beginPath();
+                painter.moveTo(sac2[0][0], sac2[0][1]);
+                painter.lineTo(sac2[1][0], sac2[1][1]);
+                painter.stroke();
+            });
                                     
             // Move both objects....
             if(obj1.solidFlag[segment1] && obj2.solidFlag[segment2]) {
@@ -1651,7 +1732,7 @@ class GameCollisionManager {
             }
         }
                 
-        this._collisions.clear();
+        this._collisions.clear();        
     }
 }
 
@@ -2154,6 +2235,10 @@ class Zone {
                 }
             }
             
+            if(debugDrawer.enabled) {
+                debugDrawer.draw(gameState.canvas, gameState.painter, camera);
+            }
+            
             gameState.painter.restore();
         }
         
@@ -2620,12 +2705,12 @@ elem_proto.levelEditor = async function(gameInfo, editZone) {
         
         painter.strokeRect(...camera.transformBox(box));
         
-        if("points" in object) {
-            painter.strokeStyle = "pink";
+        if(object.points != undefined) {
+            painter.strokeStyle = "blue";
             
             painter.beginPath();
             for(let i = 0; i < object.points.length; i++) {
-                let [x, y] = camera.transform(object.points[i]);
+                let [x, y] = camera.transform(plus(object.points[i], object.getLocation()));
                 if(i == 0) {
                     painter.moveTo(x, y);
                 }
@@ -2669,7 +2754,7 @@ elem_proto.levelEditor = async function(gameInfo, editZone) {
                 for(let blockCol of chunk.blocks) {
                     for(let block of blockCol) {
                         if(block == null) continue;
-                        if(!Object.getPrototypeOf(block).hasOwnProperty("getHitBoxes")) continue;
+                        if(block._hasDefaultBoundingBox()) continue;
                         drawHitBoxesOf(gameState.cameras[0], painter, block);
                     }
                 }
