@@ -1202,7 +1202,7 @@ class GameCollisionObject extends GameObject {
     }
     
     collisionAdjust(time, point, segment) {
-        time = Math.max(0, time - 1e-8);
+        time = time - 1e-8;
         
         let dx = (this.$x - this.$px);
         let dy = (this.$y - this.$py);
@@ -1694,7 +1694,7 @@ class GameCollisionManager {
             let [obj1, obj2, segment1, segment2, oldTime, oldOverlap] = this._collisions.pop();
             let [time, pac, sac, overlap] = this.__intersection(obj1, segment1, obj2, segment2);
                                     
-            if((time > 1) || (time < 0) || (overlap <= 0)) {
+            if((time > 1) || (time < 0) || (overlap < 0)) {
                 continue;
             }
             
